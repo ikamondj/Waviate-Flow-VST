@@ -8,3 +8,5 @@
 /Backend/cockroach-data
 
 /Backend/.vscode
+/Backend/marketplace_client/node_modules
+/Backend/marketplace_client/.next
