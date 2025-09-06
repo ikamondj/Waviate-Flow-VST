@@ -1,0 +1,9 @@
+**\.vscode\**
+**.log
+**\logs\heap_profiler\**
+/Backend/cockroach-data/logs/heap_profiler
+/Builds
+/JuceLibraryCode
+/Backend/marketplace_server/__pycache__
+/Backend/cockroach-data
+/Backend/.vscode

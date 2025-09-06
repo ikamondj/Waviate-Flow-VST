@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<JUCERPROJECT id="tWmSgu" name="WaviateFlow2025" projectType="audioplug" useAppConfig="0"
+              addUsingNamespaceToJuceHeader="0" jucerFormatVersion="1" pluginCharacteristicsValue="pluginWantsMidiIn"
+              cppLanguageStandard="20">
+  <MAINGROUP id="h4dz7N" name="WaviateFlow2025">
+    <GROUP id="{CFBFC01F-0A0E-7A20-8E13-2744F9F342F7}" name="Source">
+      <GROUP id="{01F3D01E-8826-B8F6-07E0-3F20024851F1}" name="Network">
+        <FILE id="so3I2I" name="UserData.cpp" compile="1" resource="0" file="Source/UserData.cpp"/>
+        <FILE id="Ikp9PT" name="UserData.h" compile="0" resource="0" file="Source/UserData.h"/>
+      </GROUP>
+      <GROUP id="{37CAC29E-88E6-DD01-B2F8-3A6590B52EBF}" name="Core">
+        <GROUP id="{E3BF9F4F-F81D-3CED-8688-BBB0E1366367}" name="Persistence">
+          <FILE id="DqSX1P" name="Serializer.cpp" compile="1" resource="0" file="Source/Serializer.cpp"/>
+          <FILE id="bH2Kve" name="Serializer.h" compile="0" resource="0" file="Source/Serializer.h"/>
+        </GROUP>
+        <FILE id="mPbU9p" name="CircleBuffer.cpp" compile="1" resource="0"
+              file="Source/CircleBuffer.cpp"/>
+        <FILE id="xi3Hre" name="CircleBuffer.h" compile="0" resource="0" file="Source/CircleBuffer.h"/>
+        <FILE id="BRTQSI" name="NodeData.cpp" compile="1" resource="0" file="Source/NodeData.cpp"/>
+        <FILE id="ABaIXW" name="NodeData.h" compile="0" resource="1" file="Source/NodeData.h"/>
+        <FILE id="JePp2E" name="NodeType.cpp" compile="1" resource="0" file="Source/NodeType.cpp"/>
+        <FILE id="n7lkXG" name="NodeType.h" compile="0" resource="0" file="Source/NodeType.h"/>
+        <FILE id="jpo0uR" name="Registry.cpp" compile="1" resource="0" file="Source/Registry.cpp"/>
+        <FILE id="uMGfsu" name="Runner.cpp" compile="1" resource="0" file="Source/Runner.cpp"/>
+        <FILE id="lBEJ44" name="Runner.h" compile="0" resource="0" file="Source/Runner.h"/>
+        <FILE id="iYHwWQ" name="RunnerInput.cpp" compile="1" resource="0" file="Source/RunnerInput.cpp"/>
+        <FILE id="iXMzrl" name="RunnerInput.h" compile="0" resource="0" file="Source/RunnerInput.h"/>
+        <FILE id="nxVip7" name="UserInput.cpp" compile="1" resource="0" file="Source/UserInput.cpp"/>
+        <FILE id="VjjW2c" name="UserInput.h" compile="0" resource="0" file="Source/UserInput.h"/>
+      </GROUP>
+      <GROUP id="{B706E6F2-22F2-EC40-D35E-5BC29689A32B}" name="GUI">
+        <FILE id="rjImok" name="BrowserModel.cpp" compile="1" resource="0"
+              file="Source/BrowserModel.cpp"/>
+        <FILE id="WYOfnh" name="BrowserModel.h" compile="0" resource="0" file="Source/BrowserModel.h"/>
+        <FILE id="IZkasq" name="DrawingUtils.cpp" compile="1" resource="0"
+              file="Source/DrawingUtils.cpp"/>
+        <FILE id="vPDFsl" name="DrawingUtils.h" compile="0" resource="0" file="Source/DrawingUtils.h"/>
+        <FILE id="trtlD0" name="NodeComponent.cpp" compile="1" resource="0"
+              file="Source/NodeComponent.cpp"/>
+        <FILE id="mFuHFJ" name="NodeComponent.h" compile="0" resource="0" file="Source/NodeComponent.h"/>
+        <FILE id="sgAcBY" name="Pin.cpp" compile="1" resource="0" file="Source/Pin.cpp"/>
+        <FILE id="HaM5yM" name="Pin.h" compile="0" resource="0" file="Source/Pin.h"/>
+        <FILE id="TRYB07" name="SceneComponent.cpp" compile="1" resource="0"
+              file="Source/SceneComponent.cpp"/>
+        <FILE id="Gnqabq" name="SceneComponent.h" compile="0" resource="0"
+              file="Source/SceneComponent.h"/>
+      </GROUP>
+      <FILE id="dLshJ7" name="PluginProcessor.cpp" compile="1" resource="0"
+            file="Source/PluginProcessor.cpp"/>
+      <FILE id="ezmilW" name="PluginProcessor.h" compile="0" resource="0"
+            file="Source/PluginProcessor.h"/>
+      <FILE id="IdVosT" name="PluginEditor.cpp" compile="1" resource="0"
+            file="Source/PluginEditor.cpp"/>
+      <FILE id="Q32Spv" name="PluginEditor.h" compile="0" resource="0" file="Source/PluginEditor.h"/>
+    </GROUP>
+  </MAINGROUP>
+  <MODULES>
+    <MODULE id="juce_audio_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_devices" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_formats" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_plugin_client" showAllCode="1" useLocalCopy="0"
+            useGlobalPath="1"/>
+    <MODULE id="juce_audio_processors" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_audio_utils" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_core" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_data_structures" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_dsp" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_events" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_graphics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_basics" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_gui_extra" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+    <MODULE id="juce_osc" showAllCode="1" useLocalCopy="0" useGlobalPath="1"/>
+  </MODULES>
+  <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1" JUCE_VST3_CAN_REPLACE_VST2="0"/>
+  <EXPORTFORMATS>
+    <VS2022 targetFolder="Builds/VisualStudio2022">
+      <CONFIGURATIONS>
+        <CONFIGURATION isDebug="1" name="Debug" targetName="WaviateFlow2025" winWarningLevel="2"/>
+        <CONFIGURATION isDebug="0" name="Release" targetName="WaviateFlow2025" optimisation="3"
+                       winWarningLevel="2"/>
+      </CONFIGURATIONS>
+      <MODULEPATHS>
+        <MODULEPATH id="juce_audio_basics" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_devices" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_formats" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_plugin_client" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_processors" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_audio_utils" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_core" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_data_structures" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_dsp" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_events" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_graphics" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_gui_basics" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_gui_extra" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+        <MODULEPATH id="juce_osc" path="../../../../OneDrive/Documents/JuceInstalls/JUCE/modules"/>
+      </MODULEPATHS>
+    </VS2022>
+  </EXPORTFORMATS>
+</JUCERPROJECT>
