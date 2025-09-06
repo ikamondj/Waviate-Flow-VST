@@ -6,4 +6,5 @@
 /JuceLibraryCode
 /Backend/marketplace_server/__pycache__
 /Backend/cockroach-data
+
 /Backend/.vscode
