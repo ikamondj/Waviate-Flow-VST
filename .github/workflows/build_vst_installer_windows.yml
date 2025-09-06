@@ -1,0 +1,34 @@
+name: Build JUCE Desktop App and Upload MSI Installer
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+jobs:
+  build-msi:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: Source
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build Visual Studio Solution
+        run: msbuild Builds/VisualStudio2022/YourProject.sln /p:Configuration=Release
+
+      - name: Create MSI Installer (WiX Toolset)
+        run: |
+          # Example WiX command
+          candle installer.wxs
+          light installer.wixobj -o YourAppInstaller.msi
+
+      - name: Upload MSI to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: YourAppInstaller.msi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
