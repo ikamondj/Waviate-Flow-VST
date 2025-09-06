@@ -2,11 +2,15 @@
 **.log
 **\logs\heap_profiler\**
 /Backend/cockroach-data/logs/heap_profiler
-/Builds
+/Builds/.vs
+/Builds/x64
+/Builds/x86
 /JuceLibraryCode
 /Backend/marketplace_server/__pycache__
 /Backend/cockroach-data
 
 /Backend/.vscode
-/Backend/marketplace_client/node_modules
 /Backend/marketplace_client/.next
+/Backend/marketplace_client/node_modules
+/Builds/VisualStudio2022/.vs
+/Builds/VisualStudio2022/x64

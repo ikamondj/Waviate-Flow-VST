@@ -1,0 +1,46 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio Version 17
+
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WaviateFlow2025 - Standalone Plugin", "WaviateFlow2025_StandalonePlugin.vcxproj", "{2D04497D-FCBF-26AA-6514-3F7E8BC4C306}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B307AF1E-5C35-7996-24E0-7C2E1E7C0567} = {B307AF1E-5C35-7996-24E0-7C2E1E7C0567}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WaviateFlow2025 - VST3", "WaviateFlow2025_VST3.vcxproj", "{3A048958-D174-2CA7-D805-A0B15DED2FF2}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B307AF1E-5C35-7996-24E0-7C2E1E7C0567} = {B307AF1E-5C35-7996-24E0-7C2E1E7C0567}
+		{27AEBEBA-7F8C-09BD-8AA8-7AA21997A592} = {27AEBEBA-7F8C-09BD-8AA8-7AA21997A592}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WaviateFlow2025 - Shared Code", "WaviateFlow2025_SharedCode.vcxproj", "{B307AF1E-5C35-7996-24E0-7C2E1E7C0567}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "WaviateFlow2025 - VST3 Manifest Helper", "WaviateFlow2025_VST3ManifestHelper.vcxproj", "{27AEBEBA-7F8C-09BD-8AA8-7AA21997A592}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3A048958-D174-2CA7-D805-A0B15DED2FF2}.Debug|x64.ActiveCfg = Debug|x64
+		{3A048958-D174-2CA7-D805-A0B15DED2FF2}.Debug|x64.Build.0 = Debug|x64
+		{3A048958-D174-2CA7-D805-A0B15DED2FF2}.Release|x64.ActiveCfg = Release|x64
+		{3A048958-D174-2CA7-D805-A0B15DED2FF2}.Release|x64.Build.0 = Release|x64
+		{2D04497D-FCBF-26AA-6514-3F7E8BC4C306}.Debug|x64.ActiveCfg = Debug|x64
+		{2D04497D-FCBF-26AA-6514-3F7E8BC4C306}.Debug|x64.Build.0 = Debug|x64
+		{2D04497D-FCBF-26AA-6514-3F7E8BC4C306}.Release|x64.ActiveCfg = Release|x64
+		{2D04497D-FCBF-26AA-6514-3F7E8BC4C306}.Release|x64.Build.0 = Release|x64
+		{B307AF1E-5C35-7996-24E0-7C2E1E7C0567}.Debug|x64.ActiveCfg = Debug|x64
+		{B307AF1E-5C35-7996-24E0-7C2E1E7C0567}.Debug|x64.Build.0 = Debug|x64
+		{B307AF1E-5C35-7996-24E0-7C2E1E7C0567}.Release|x64.ActiveCfg = Release|x64
+		{B307AF1E-5C35-7996-24E0-7C2E1E7C0567}.Release|x64.Build.0 = Release|x64
+		{27AEBEBA-7F8C-09BD-8AA8-7AA21997A592}.Debug|x64.ActiveCfg = Debug|x64
+		{27AEBEBA-7F8C-09BD-8AA8-7AA21997A592}.Debug|x64.Build.0 = Debug|x64
+		{27AEBEBA-7F8C-09BD-8AA8-7AA21997A592}.Release|x64.ActiveCfg = Release|x64
+		{27AEBEBA-7F8C-09BD-8AA8-7AA21997A592}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
