@@ -13,7 +13,7 @@ class CircleBuffer {
     std::deque<double> backingBuffer;
     int maxSize = 480000;
 public:
-    const double& operator[](size_t index) const;
+    const double operator[](size_t index) const;
     void add(double value);
 	size_t size() const;
 };

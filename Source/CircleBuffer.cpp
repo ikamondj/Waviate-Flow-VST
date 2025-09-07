@@ -9,7 +9,7 @@
 */
 
 #include "CircleBuffer.h"
-const double& CircleBuffer::operator[](size_t index) const {
+const double CircleBuffer::operator[](size_t index) const {
 	if (index >= backingBuffer.size()) {
         return 0.0;
 	}
