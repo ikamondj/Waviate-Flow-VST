@@ -18,8 +18,17 @@ InputFeatures::InputFeatures(const juce::String& n, bool isBool, int requiredSiz
     : name(n), isBoolean(isBool), requiredSize(requiredSize), requiresCompileTimeKnowledge(reqCompileTime) {
 }
 
+uint64_t NodeType::getNodeUserID() const
+{
+    return NodeID >> 16;
+}
 
+uint16_t NodeType::getNodeId() const
+{
+    return static_cast<uint16_t>(NodeID & static_cast<uint64_t>(0xFFFFL));
+}
 
-
-
-
+uint64_t NodeType::getNodeFullID() const
+{
+    return NodeID;
+}

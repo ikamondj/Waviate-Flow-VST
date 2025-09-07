@@ -47,5 +47,9 @@ struct NodeType {
     bool alwaysOutputsRuntimeData = false;
     class SceneComponent* fromScene = nullptr;
     bool isInputNode = false;
+    uint64_t NodeID;
+    uint64_t getNodeUserID() const;
+    uint16_t getNodeId() const;
+    uint64_t getNodeFullID() const;
 };
 
