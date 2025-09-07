@@ -51,5 +51,6 @@ struct NodeType {
     uint64_t getNodeUserID() const;
     uint16_t getNodeId() const;
     uint64_t getNodeFullID() const;
+    void setNodeId(uint64_t userId, uint16_t nodeId);
 };
 

@@ -9,7 +9,7 @@ Set-Location ../
 
 Start-Process "C:\Program Files\Cockroach\cockroach.exe" -ArgumentList "start-single-node --insecure --listen-addr=localhost:26257 --http-addr=localhost:8092 --store=cockroach-data" -NoNewWindow
 
-Start-Process "C:\Program Files\Cockroach\cockroach.exe" 'sql --insecure --execute="sourceinit.sql"' -NoNewWindow
+Start-Process "C:\Program Files\Cockroach\cockroach.exe" 'sql --insecure --execute="schema.sql"' -NoNewWindow
 
 Start-Process "C:\Windows\py.exe" -ArgumentList ".\populate_fake_data.py" -NoNewWindow
 

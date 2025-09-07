@@ -32,3 +32,7 @@ uint64_t NodeType::getNodeFullID() const
 {
     return NodeID;
 }
+
+void NodeType::setNodeId(uint64_t userId, uint16_t nodeId) {
+    NodeID = userId << 16 | nodeId;
+}

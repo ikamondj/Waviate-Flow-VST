@@ -12,6 +12,7 @@
 #include "UserInput.h"
 #include "NodeType.h"
 #include "Runner.h"
+#include "UserData.h"
 #include "RunnerInput.h"
 //==============================================================================
 /**
@@ -89,6 +90,7 @@ public:
     std::array<float, bufferSize> ring;
     juce::AbstractFifo fifo{ bufferSize };
     class SceneComponent* getAudibleScene();
+    std::optional<UserData> currentLogin;
 private:
     class SceneComponent* audibleScene;
     std::atomic<int> currentRunner = { 0 };

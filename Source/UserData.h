@@ -9,3 +9,7 @@
 */
 
 #pragma once
+class UserData {
+    juce::String username;
+
+};
