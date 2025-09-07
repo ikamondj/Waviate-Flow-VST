@@ -1,16 +1,17 @@
 /*
   ==============================================================================
 
-    UserData.h
-    Created: 23 Aug 2025 4:35:19pm
+    Noise.h
+    Created: 6 Sep 2025 11:44:59pm
     Author:  ikamo
 
   ==============================================================================
 */
 
 #pragma once
-#include <JuceHeader.h>
-class UserData {
-    juce::String username;
 
-};
+double uniform_closed(double a, double b);
+
+double deterministic_uniform_closed(double a, double b, double key);
+
+double coin_flip();

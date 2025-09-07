@@ -17,7 +17,9 @@
 // Attach only if index valid & no loop
 
 
-NodeData::NodeData(const NodeType& type) : type(type)
+
+
+NodeData::NodeData(const NodeType& type) : type(type), compileTimeSizes()
 {
 }
 
@@ -27,7 +29,7 @@ const NodeType* NodeData::getType() const
     return &type;
 }
 
-const bool NodeData::isSingleton(NodeComponent* inlineInstance) const
+const bool NodeData::isSingleton(RunnerInput* inlineInstance) const
 {
     return getCompileTimeSize(inlineInstance) == 1;
 }
@@ -41,9 +43,50 @@ const double NodeData::getNumericProperty(const juce::String& key) const noexcep
 {
 	return numericProperties.contains(key) ? numericProperties.at(key) : 0.0;
 }
+const std::vector<double> NodeData::getCompileTimeValue(RunnerInput* inlineInstance) const noexcept
+{
+    std::vector<std::vector<double>> ins;
+    for (int i = 0; i < getNumInputs(); i += 1) {
+        auto input = getInput(i);
+        std::vector<double> in;
+        if (input) {
+            in = input->getCompileTimeValue(inlineInstance);
+        }
+        else {
+            in.push_back(getType()->inputs[i].defaultValue);
+        }
+        ins.push_back(in);
+    }
+    std::vector<std::span<double>> spanInputs;
+    for (auto& in : ins) {
+        spanInputs.push_back(std::span<double>(&in[0], in.size()));
+    }
+    UserInput fakeInput;
+    std::vector<double> outputField;
+    
+    outputField.resize(getMaxOutputDimension(ins, *inlineInstance, inputIndex));
+    std::span<double> outputSpan(&outputField[0], outputField.size());
+    getType()->execute(*this, fakeInput, spanInputs, outputSpan, *inlineInstance);
+    return outputField;
+}
 const std::map<juce::String, double>& NodeData::getNumericProperties() const noexcept { return numericProperties; };
 
 void NodeData::setProperty(const juce::String& key, const juce::String& value) { properties[key] = value; }
+bool NodeData::needsCompileTimeInputs() const
+{
+    const NodeData* prev = this;
+    NodeData* outp = output;
+    while (outp) {
+        for (int i = 0; i < outp->getNumInputs(); i += 1) {
+            if (outp->getInput(i) == this && (outp->getType()->inputs[i].requiresCompileTimeKnowledge || outp->needsCompileTimeInputs())) {
+                return true;
+            }
+        }
+        prev = outp;
+        outp = outp->output;
+    }
+    return false;
+}
 void NodeData::setProperty(const juce::String& key, const double value) {
 	numericProperties[key] = value;
 }
@@ -65,12 +108,12 @@ NodeData* NodeData::getInput(size_t idx) {
 
 bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
 {
-	auto& registry = owningComponent->getOwningScene()->processorRef.getRegistry();
+    auto& registry = owningComponent->getOwningScene()->processorRef.getRegistry();
     if (idx >= type.inputs.size())
         return false; // out of bounds for this node type
 
     auto input = type.inputs[idx];
-    if (input.requiresCompileTimeKnowledge) {
+    if (input.requiresCompileTimeKnowledge || needsCompileTimeInputs()) {
         auto otherType = other->getType();
         if (!other->isCompileTimeKnown()) {
             if (!other->getType()->isInputNode) {
@@ -107,6 +150,9 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
         inputNodes.resize(type.inputs.size(), nullptr);
 
     inputNodes[idx] = other;
+    if (other) {
+        other->output = this;
+    }
     owningComponent->getOwningScene()->processorRef.updateRegistryFull();
     owningComponent->getOwningScene()->onSceneChanged();
     return true;
@@ -115,7 +161,9 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
 void NodeData::detachInput(size_t idx)
 {
     if (idx < inputNodes.size()) {
-
+        if (inputNodes[idx]) {
+            inputNodes[idx]->output = nullptr;
+        }
         inputNodes[idx] = nullptr;
         owningComponent->getOwningScene()->processorRef.updateRegistryFull();
         owningComponent->getOwningScene()->onSceneChanged();
@@ -123,31 +171,36 @@ void NodeData::detachInput(size_t idx)
         
 }
 
- const bool NodeData::isCompileTimeKnown() const noexcept
+#include <unordered_set>
+
+
+
+const bool NodeData::isCompileTimeKnown() const noexcept
 {
-     if (getType()->alwaysOutputsRuntimeData) return false;
-     
-	 for (int i = 0; i < getType()->inputs.size(); ++i)
-	 {
-         auto inp = getInput(i);
-		 if (!getType()->inputs[i].requiresCompileTimeKnowledge && inp && !inp->isCompileTimeKnown())
-			 return false; // if any required input is runtime
-	 }
+    // Node explicitly marked as runtime
+    if (getType()->alwaysOutputsRuntimeData)
+        return false;
 
-     if (getType()->isInputNode) {
-         auto scene = owningComponent->getOwningScene();
-         for (auto& comp : scene->nodes) {
-             for (int i = 0; i < comp->getType().inputs.size(); i += 1) {
-                 if (comp->getNodeDataConst().getInput(i) == this && comp->getType().inputs[i].requiresCompileTimeKnowledge) {
-                     return true;
-                 }
-             }
-         }
-         return false;
-     }
+    // For non-input nodes: all inputs that *require* compile-time knowledge
+    // must themselves be compile-time known. if they're present.
+    if (!getType()->isInputNode)
+    {
+        const int nin = static_cast<int>(getType()->inputs.size());
+        for (int i = 0; i < nin; ++i)
+        {
+            const auto& inFeat = getType()->inputs[i];
+ 
+            const NodeData* inp = getInput(i);
+            if (inp && !inp->isCompileTimeKnown()) return false; // required but not CT-known
+        }
+        return true; // all required inputs are compile-time known
+    }
 
-     return true;
+    return needsCompileTimeInputs();
 }
+
+
+
 
  const int NodeData::getNumInputs() const noexcept
  {
@@ -162,7 +215,7 @@ void NodeData::detachInput(size_t idx)
 	    upstreams.push_back(in);
 	 }
      auto type = getType();
-     int result = type->getOutputSize(upstreams,inputs,context, inputNum);
+     int result = type->getOutputSize(upstreams,inputs,context, inputNum, *this);
      return result;
  }
 
@@ -186,12 +239,7 @@ void NodeData::detachInput(size_t idx)
 
  void NodeData::setCompileTimeSize(RunnerInput* inlineInstance, int s)
  {
-     if (this->compileTimeSizes.contains(inlineInstance)) {
-         compileTimeSizes[inlineInstance] = s;
-     }
-     else {
-         compileTimeSizes.insert({ inlineInstance, s });
-     }
+     compileTimeSizes.insert_or_assign(inlineInstance, s);
  }
 
 

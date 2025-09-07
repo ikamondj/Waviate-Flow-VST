@@ -40,7 +40,7 @@ struct NodeType {
     using ExecuteFn = void(*)(const NodeData& node, class UserInput& userInput, const std::vector<std::span<double>>& inputs, std::span<double>& output, class RunnerInput& inlineInstance);
     ExecuteFn execute;
     std::function<void(class NodeComponent&, NodeData&)> buildUI;
-    std::function<int(const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<double>>& inputs, class RunnerInput& inlineInstance, int inputNum)> getOutputSize;
+    std::function<int(const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<double>>& inputs, class RunnerInput& inlineInstance, int inputNum, const NodeData& self)> getOutputSize;
     std::function<void(NodeComponent&)> onResized = [](NodeComponent&) {};
     bool isSingleton(const NodeData* node, const std::vector<std::span<double>>& inputs) const;
     bool isBoolean = false;

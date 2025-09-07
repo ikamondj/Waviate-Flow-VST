@@ -21,14 +21,16 @@ public:
 
     const struct NodeType* getType() const;
 
-    const bool isSingleton(class NodeComponent* inlineInstance) const;
+    const bool isSingleton(class RunnerInput* inlineInstance) const;
 
     const std::map<juce::String, juce::String>& getProperties() const noexcept;
 	const juce::String getStringProperty(const juce::String& key) const noexcept;
 	const double getNumericProperty(const juce::String& key) const noexcept;
+
+    const std::vector<double> getCompileTimeValue(class RunnerInput* inlineInstance) const noexcept;
     const std::map<juce::String, double>& getNumericProperties() const noexcept;
     void setProperty(const juce::String& key, const juce::String& value);
-
+    bool needsCompileTimeInputs() const;
     void setProperty(const juce::String& key, const double value);
 
     juce::Point<int> getPosition() const noexcept;
@@ -55,6 +57,7 @@ public:
     void setCompileTimeSize(RunnerInput* inlineInstance, int s);
     void markUncompiled(RunnerInput* inlineInstance);
     std::vector<NodeData*> inputNodes;
+    NodeData* output = nullptr;
     int inputIndex = -1;
 private:
 	

@@ -1,13 +1,13 @@
+# gcp_handler.py
 import functions_framework
-import json
 from dispatcher import handle
+import json
 
 @functions_framework.http
-def dispatcher_http(request):
-    try:
-        req_json = request.get_json(silent=True) or {}
-        body = json.dumps(req_json)
-        result = handle(body)
-        return (json.dumps(result), 200, {"Content-Type": "application/json"})
-    except Exception as e:
-        return (json.dumps({"error": str(e)}), 400, {"Content-Type": "application/json"})
+def http_entrypoint(request):
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    ck = {k: v for k, v in request.cookies.items()}
+    body = request.get_data(as_text=True) or "{}"
+    result = handle(body, headers=headers, cookies=ck)
+    status = result.pop("status", 200) if isinstance(result, dict) else 200
+    return (json.dumps(result), status, {"content-type": "application/json"})

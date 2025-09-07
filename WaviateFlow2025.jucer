@@ -10,6 +10,10 @@
         <FILE id="Ikp9PT" name="UserData.h" compile="0" resource="0" file="Source/UserData.h"/>
       </GROUP>
       <GROUP id="{37CAC29E-88E6-DD01-B2F8-3A6590B52EBF}" name="Core">
+        <GROUP id="{64960AC0-DF34-E9B2-9A54-DDD55378AFF5}" name="Utils">
+          <FILE id="j1LlI4" name="Noise.cpp" compile="1" resource="0" file="Source/Noise.cpp"/>
+          <FILE id="QI1Wwu" name="Noise.h" compile="0" resource="0" file="Source/Noise.h"/>
+        </GROUP>
         <GROUP id="{E3BF9F4F-F81D-3CED-8688-BBB0E1366367}" name="Persistence">
           <FILE id="DqSX1P" name="Serializer.cpp" compile="1" resource="0" file="Source/Serializer.cpp"/>
           <FILE id="bH2Kve" name="Serializer.h" compile="0" resource="0" file="Source/Serializer.h"/>

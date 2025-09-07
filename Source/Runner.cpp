@@ -124,7 +124,8 @@ std::vector<double> Runner::findRemainingSizes(NodeData* node, std::unordered_ma
 		for (int i = 0; i < inputspans.size(); i += 1) {
 			actualspans.emplace_back(inputspans[i]);
 		}
-		node->setCompileTimeSize(&inlineInstance, node->getMaxOutputDimension(inputspans, inlineInstance, node->inputIndex));
+		int dim = node->getMaxOutputDimension(inputspans, inlineInstance, node->inputIndex);
+		node->setCompileTimeSize(&inlineInstance, dim);
 		
 		for (int i = 0; i < node->getCompileTimeSize(&inlineInstance); i += 1) {
 			tempOutput.push_back(0.0);
@@ -152,10 +153,11 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 	input.safeOwnership.clear();
 	input.nodeCompileTimeOutputs.clear();
 	input.nodeCopies.clear();
+	input.remap.clear();
 	input.field.clear();
 	if (!scene) { return; }
 	if (scene->nodes.empty()) { return; }
-	std::unordered_map<const NodeData*, NodeData*> remap;
+	std::unordered_map<const NodeData*, NodeData*>& remap = input.remap;
 	const NodeData* editorOutput = nullptr;
 
 	for (size_t i = 0; i < scene->nodes.size(); ++i) {
@@ -174,6 +176,7 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 	input.outputNode = remap[editorOutput];
 
 	for (auto& newNode : input.nodeCopies) {
+		newNode.markUncompiled(&input);
 		for (auto*& in : newNode.inputNodes) {
 			if (in) {
 				auto it = remap.find(in);

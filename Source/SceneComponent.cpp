@@ -19,7 +19,8 @@ SceneComponent::SceneComponent(WaviateFlow2025AudioProcessor& processor, const j
         
 	}
     highlightedNode = nullptr;
-    setSize(8192,8192);
+    setSize(8192, 8192);
+    setWantsKeyboardFocus(true);
 }
 
 struct MenuNode
@@ -43,6 +44,7 @@ void SceneComponent::mouseDown(const juce::MouseEvent& e)
     if (processorRef.getCurrentEditor()) {
         processorRef.getCurrentEditor()->deselectBrowserItem();
     }
+    grabKeyboardFocus();
     
     if (this != processorRef.activeScene) {
         processorRef.activeScene = this;
@@ -274,13 +276,11 @@ void SceneComponent::paint(juce::Graphics& g)
         return (f.requiredSize == 1) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold;
         };
     auto outputFillColour = [](NodeComponent* nc) -> juce::Colour {
-        try {
-            return nc->getNodeData().isSingleton(nullptr) ? juce::Colours::lawngreen.darker(.4f)
-                : juce::Colours::gold;
-        }
-        catch (const std::logic_error&) {
+            if (nc->getNodeDataConst().compileTimeSizeReady(nc->getOwningScene())) {
+                return nc->getNodeData().isSingleton(nc->getOwningScene()) ? juce::Colours::lawngreen.darker(.4f)
+                    : juce::Colours::gold;
+            }
             return juce::Colours::lawngreen.darker(.4f);
-        }
         };
 
     // -------------------------------------
@@ -312,8 +312,8 @@ void SceneComponent::paint(juce::Graphics& g)
             juce::Point<float> c2(end.x - dx, end.y);
 
             juce::Colour outline = fromOutput
-                ? (nc->getNodeData().isCompileTimeKnown() ? juce::Colours::black : juce::Colours::red)
-                : (nc->getType().inputs[(size_t)fromInput].requiresCompileTimeKnowledge ? juce::Colours::darkred : juce::Colours::black);
+                ? (nc->getNodeData().isCompileTimeKnown() ? juce::Colours::black : juce::Colours::darkred)
+                : (nc->getType().inputs[(size_t)fromInput].requiresCompileTimeKnowledge || nc->getNodeDataConst().needsCompileTimeInputs() ? juce::Colours::darkred : juce::Colours::black);
 
             juce::Colour inner = fromOutput
                 ? [&] { try { return nc->getNodeData().isSingleton(nullptr) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold; }
@@ -472,7 +472,7 @@ void SceneComponent::editNodeType()
         for (const std::unique_ptr<class NodeComponent>& downstream : nodes) {
             auto downstreamData = downstream->getNodeDataConst();
             for (int i = 0; i < downstreamData.getNumInputs(); i += 1) {
-                if (downstreamData.getInput(i) == &data && downstreamData.getType()->inputs[i].requiresCompileTimeKnowledge) {
+                if (downstreamData.getInput(i) == &data && (downstreamData.getType()->inputs[i].requiresCompileTimeKnowledge || downstreamData.needsCompileTimeInputs())) {
                     requiresCompileTime = true;
                     goto exit_loop;
                 }
@@ -489,7 +489,7 @@ void SceneComponent::editNodeType()
         NodeComponent* n = node.owningComponent;
         Runner::run(*n, userInput, inputs);
     };
-    customNodeType.getOutputSize = [this](const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& d, RunnerInput& n, int) {
+    customNodeType.getOutputSize = [this](const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& d, RunnerInput& n, int, const NodeData&) {
         auto& outData = this->nodes[0]->getNodeDataConst();
         std::vector<std::span<double>> outerInputs;
         for (auto v : d) {

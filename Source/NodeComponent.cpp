@@ -7,7 +7,8 @@
 NodeComponent::NodeComponent(NodeData nodeData, const NodeType& nodeType, SceneComponent& scene)
 	: node(nodeData), type(nodeType), owningScene(scene)
 {
-    
+    setMouseClickGrabsKeyboardFocus(false);
+    setWantsKeyboardFocus(true);
     updateSize();
 }
 // Is the mouse over any input pin? (local coordinates)
@@ -62,23 +63,22 @@ void NodeComponent::paint(juce::Graphics& g)
     // helpers for colors
     auto inputOutlineColour = [&](int idx) -> juce::Colour {
         const auto& f = t.inputs[(size_t)idx];
-        return f.requiresCompileTimeKnowledge ? juce::Colours::darkred : juce::Colours::black;
+        return f.requiresCompileTimeKnowledge || getNodeDataConst().needsCompileTimeInputs() ? juce::Colours::darkred : juce::Colours::black;
         };
     auto outputOutlineColour = [&]() -> juce::Colour {
-        return getNodeData().isCompileTimeKnown() ? juce::Colours::black : juce::Colours::red;
+        return getNodeData().isCompileTimeKnown() ? juce::Colours::black : juce::Colours::darkred;
         };
     auto inputFillColour = [&](int idx) -> juce::Colour {
         const auto& f = t.inputs[(size_t)idx];
         return (f.requiredSize == 1) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold;
         };
     auto outputFillColour = [&]() -> juce::Colour {
-        try {
-            return getNodeData().isSingleton(nullptr) ? juce::Colours::lawngreen.darker(.4f)
+        if (getNodeData().compileTimeSizeReady(getOwningScene())) {
+            return getNodeData().isSingleton(getOwningScene()) ? juce::Colours::lawngreen.darker(.4f)
                 : juce::Colours::gold;
         }
-        catch (const std::logic_error&) {
+            
             return juce::Colours::lawngreen.darker(.4f);
-        }
         };
 
     // draw input pins + labels
@@ -177,6 +177,7 @@ double NodeComponent::colorHash(juce::String s)
 
 void NodeComponent::mouseDown(const juce::MouseEvent& e)
 {
+    grabKeyboardFocus();
     if (getProcessorRef().getCurrentEditor()) {
         getProcessorRef().getCurrentEditor()->deselectBrowserItem();
     }
@@ -197,7 +198,15 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                 int size = getNodeDataConst().getCompileTimeSize(scene);
                 tooltip.addItem(juce::String("output size: ") + juce::String(size), false, false, []() {});
                 if (getNodeDataConst().isCompileTimeKnown()) {
-
+                    auto& runner = getProcessorRef().getBuildableRunner();
+                    auto field = getNodeDataConst().getCompileTimeValue(&runner);
+                    juce::String result = "value: { ";
+                    for (int i = 0; i < (int)field.size(); ++i) {
+                        result += juce::String(field[i]);
+                        result += juce::String(", ");
+                    }
+                    result += juce::String("}");
+                    tooltip.addItem(result, false, false, []() {});
                 }
             }
             else {
@@ -219,16 +228,14 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                     // Note: your original code had a condition that looked inverted;
                     // here we keep the same structure.
                     auto& runner = imp.getBuildableRunner();
-                    if (!Runner::containsNodeField(inputNode, runner.nodeOwnership)) {
-                        auto field = Runner::getNodeField(inputNode, runner.nodeOwnership);
-                        juce::String result = "value: { ";
-                        for (int i = 0; i < (int)field.size(); ++i) {
-                            result += juce::String(field[i]);
-                            result += juce::String(", ");
-                        }
-                        result += juce::String("}");
-                        tooltip.addItem(result, false, false, []() {});
+                    auto field = inputNode->getCompileTimeValue(&runner);
+                    juce::String result = "value: { ";
+                    for (int i = 0; i < (int)field.size(); ++i) {
+                        result += juce::String(field[i]);
+                        result += juce::String(", ");
                     }
+                    result += juce::String("}");
+                    tooltip.addItem(result, false, false, []() {});
                 }
                 tooltip.addItem(juce::String("input size: ") + juce::String(inputSize), false, false, []() {});
             }
@@ -377,7 +384,7 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e)
             if (pinDragInputIndex >= 0) {
                 this->getNodeData().detachInput(pinDragInputIndex);
                 condition = [&](const NodeType& t) {
-                    if (this->getType().inputs[pinDragInputIndex].requiresCompileTimeKnowledge) {
+                    if (this->getType().inputs[pinDragInputIndex].requiresCompileTimeKnowledge || this->getNodeDataConst().needsCompileTimeInputs()) {
                         if (t.alwaysOutputsRuntimeData) {
                             return false;
                         }
@@ -429,6 +436,14 @@ void NodeComponent::updateSize()
     double scale = std::pow(2.0, currentLogScale);
     double y = getType().inputs.size() < 1 ? 80 : 80 + (getType().inputs.size() - 1) * 20;
     double x = 50 + getType().name.length() * 10 + 40;
+    if (!inputGUIElements.empty()) {
+        auto t = dynamic_cast<juce::TextEditor*>(inputGUIElements.back().get());
+        if (t) {
+            double xx = 50 + t->getText().length() * 10 + 40;
+            if (xx > x) x = xx;
+        }
+    }
+    
     x *= scale;
     y *= scale;
     setSize(x, y);

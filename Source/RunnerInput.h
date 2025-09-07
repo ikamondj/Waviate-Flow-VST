@@ -23,5 +23,6 @@ public:
     std::unordered_map<NodeData*, std::tuple<int, int>> safeOwnership;
     std::unordered_set<NodeData*> compileTimeKnown;
     std::unordered_map<NodeData*, std::vector<double>> nodeCompileTimeOutputs;
+    std::unordered_map<const NodeData*, NodeData*> remap;
     NodeData* outputNode = nullptr;
 };

@@ -11,27 +11,36 @@
 #include "PluginEditor.h"
 #include "NodeType.h"
 #include "RunnerInput.h"
+#include "Noise.h"
 #define MAX_UNKNOWN_SIZE 1024
 
+
 //get output size general functions
-int outputSize1Known(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>&, RunnerInput&, int) {
+int outputSize1Known(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>&, RunnerInput&, int, const NodeData&) {
 	return 1;
 }
 
-int outputSizeComponentWise(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& r, int) {
+int outputSizeAllMidi(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>&, RunnerInput&, int, const NodeData&) {
+    return 128;
+}
+
+int outputSizeComponentWise(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& r, int, const NodeData&) {
     int size = 1;
     bool getsPadded = false;
-    for (const NodeData* input : inputs) {
-        if (input) {
-            orableBool inputUnknown;
-            int inputSize = input->getCompileTimeSize(&r);
-            if (inputSize > size) {
-                size = inputSize;
-            }
+    for (const auto& input : s) {
+        if (input.size() > size) {
+            size = input.size();
         }
     }
 
     return size;
+}
+
+std::function<int(const std::vector<NodeData*>&, const std::vector<std::vector<double>>& s, RunnerInput& r, int, const NodeData&)> outputSizeFromInputScalar(int whichInput) {
+    return [whichInput](const std::vector<NodeData*>&, const std::vector<std::vector<double>>& s, RunnerInput&, int, const NodeData&)
+    {
+        return std::max(1, static_cast<int>(std::round(s[whichInput][0])));
+    };
 }
 
 double wrapTo(double v, double lo, double hi) {
@@ -67,7 +76,7 @@ void makeCmp(const char* nm, const char* tip, std::vector<NodeType>& registry)
 {
     NodeType t;
     t.name = nm;
-    t.address = "logic/compare/";
+    t.address = "math/logic/compare/";
     t.tooltip = tip;
     t.inputs = { InputFeatures("x", false,0,false),
                  InputFeatures("y", false,0,false) };
@@ -82,28 +91,26 @@ void makeCmp(const char* nm, const char* tip, std::vector<NodeType>& registry)
 }
 
 
-int outputSizeEqualsSingleInputSize(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& r, int) {
+int outputSizeEqualsSingleInputSize(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& r, int, const NodeData&) {
 	if (inputs.empty()) {
 		return 1;
 	}
-	return inputs[0] ? inputs[0]->getCompileTimeSize(&r) : 1;
+    return s[0].size();
 }
 
 
 
-int outputSizeOuterProduct(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& r, int) {
+int outputSizeOuterProduct(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& r, int, const NodeData&) {
 	int size = 1;
 	bool getsPadded = false;
-	for (const NodeData* input : inputs) {
-		if (input) {
-			size *= input->getCompileTimeSize(&r);
-		}
+	for (const auto& input : s) {
+		size *= input.size();
 	}
 	return size;
 }
 
 
-int outputSizeLerpStyle(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& c, int x) {
+int outputSizeLerpStyle(const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& c, int x, const NodeData& self) {
 	std::vector<NodeData*> justTheFirstTwo;
 	if (inputs.size() > 2) {
 		justTheFirstTwo.push_back(inputs[0]);
@@ -112,15 +119,13 @@ int outputSizeLerpStyle(const std::vector<NodeData*>& inputs, const std::vector<
 	else {
 		throw std::exception("Lerp style output size requires 2 lerp inputs and a interpolator");
 	}
-	return outputSizeComponentWise(justTheFirstTwo, s, c, x);
+	return outputSizeComponentWise(justTheFirstTwo, s, c, x,self);
 }
 
-std::function<int(const std::vector<NodeData*>&, const std::vector<std::vector<double>>& s, RunnerInput& r, int)> outputSizeByInputPin(int pinIndex) {
-	return [pinIndex](const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& r, int) {
-		if (inputs.size() > pinIndex) {
-			if (inputs[pinIndex]) {
-				return inputs[pinIndex]->getCompileTimeSize(&r);
-			}
+std::function<int(const std::vector<NodeData*>&, const std::vector<std::vector<double>>& s, RunnerInput& r, int, const NodeData&)> outputSizeByInputPin(int pinIndex) {
+	return [pinIndex](const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& s, RunnerInput& r, int, const NodeData&) {
+		if (s.size() > pinIndex) {
+			return (int)s[pinIndex].size();
 		}
         return 1;
 	};
@@ -145,13 +150,21 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     outputType.buildUI = [](NodeComponent& n, NodeData& d) {
         n.inputGUIElements.push_back(std::make_unique<juce::AudioVisualiserComponent>(1));
         auto* v = dynamic_cast<juce::AudioVisualiserComponent*>(n.inputGUIElements.back().get());
+        v->setSamplesPerBlock(12);
         n.addAndMakeVisible(v);
+        float scale = (float)std::pow(2.0, n.getOwningScene()->logScale);
+        const float sides = 20.0f * scale;
+        float cornerSize = 24.0f * scale;
+        if (!n.inputGUIElements.empty()) {
+            n.inputGUIElements.back()->setBounds(sides, cornerSize, n.getWidth() - sides - sides, n.getHeight() - cornerSize * 2);
+        }
     };
     outputType.onResized = [](NodeComponent& n) {
-        double scale = std::pow(2.0, n.getOwningScene()->logScale);
-        float cornerSize = 24.0f * (float)scale;
+        float scale = (float)std::pow(2.0, n.getOwningScene()->logScale);
+        const float sides = 20.0f * scale;
+        float cornerSize = 24.0f * scale;
         if (!n.inputGUIElements.empty()) {
-            n.inputGUIElements.back()->setBounds(n.getWidth() / 2.0, cornerSize, n.getWidth() / 2.0, n.getHeight() - cornerSize * 2);
+            n.inputGUIElements.back()->setBounds(sides, cornerSize, n.getWidth() - sides - sides, n.getHeight() - cornerSize * 2);
         }
     };
     outputType.isBoolean = false;
@@ -180,11 +193,10 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         
     };
     inputType.isInputNode = true;
-    inputType.getOutputSize = [](const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<double>>& inputs, RunnerInput& inlineInstance, int inputNum) {
+    inputType.getOutputSize = [](const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<double>>& inputs, RunnerInput& inlineInstance, int inputNum, const NodeData&) {
         auto* inlineComponent = dynamic_cast<NodeComponent*>(&inlineInstance);
         if (inlineComponent) {
-            auto outerInput = inlineComponent->getNodeDataConst().getInput(inputNum);
-            return outerInput ? outerInput->getCompileTimeSize(&inlineInstance) : 1;
+            return (int)inputs[inputNum].size();
         }
 
         return 1;
@@ -194,7 +206,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             node.setProperty("name", "input");
             comp.inputGUIElements.push_back(std::make_unique<juce::TextEditor>("name"));
             auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-            back->setJustification(juce::Justification::centred);
+            back->setJustification(juce::Justification::horizontallyCentred);
             back->setText("input");
             back->onTextChange = [&node, &comp]()
                 {
@@ -202,10 +214,27 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                     node.setProperty("name", el->getText());
                     comp.getOwningScene()->onSceneChanged();
                 };
-            back->setBounds(20, 20, comp.getWidth() - 40, 30);
+
+            const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            const float cornerSize = 24.0f * scale;
+            back->setMultiLine(false, false);
+            back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
+            back->applyFontToAllText(back->getFont().withHeight(14 * scale));
             comp.addAndMakeVisible(back);
         };
-    inputType.onResized = [](NodeComponent&) {};
+    inputType.onResized = [](NodeComponent& comp) {
+        if (comp.inputGUIElements.empty()) return;
+        auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+
+        if (!back) return;
+        const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+        const float sides = 20.0f * scale;
+        const float cornerSize = 24.0f * scale;
+        back->setMultiLine(false, false);
+        back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
+        back->applyFontToAllText(back->getFont().withHeight(14 * scale));
+        };
     inputType.isBoolean = false;
     inputType.alwaysOutputsRuntimeData = false;
     inputType.fromScene = nullptr;
@@ -232,8 +261,40 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             }
         };
     boolInputType.getOutputSize = inputType.getOutputSize; 
-    boolInputType.buildUI = [](NodeComponent&, NodeData&) {};
-    boolInputType.onResized = [](NodeComponent&) {};
+    boolInputType.buildUI = [](NodeComponent& comp, NodeData& node)
+        {
+            node.setProperty("name", "input");
+            comp.inputGUIElements.push_back(std::make_unique<juce::TextEditor>("name"));
+            auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+            back->setJustification(juce::Justification::horizontallyCentred);
+            back->setText("input");
+            back->onTextChange = [&node, &comp]()
+                {
+                    auto el = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+                    node.setProperty("name", el->getText());
+                    comp.getOwningScene()->onSceneChanged();
+                };
+
+            const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            const float cornerSize = 24.0f * scale;
+            back->setMultiLine(false, false);
+            back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
+            back->applyFontToAllText(back->getFont().withHeight(14 * scale));
+            comp.addAndMakeVisible(back);
+        };
+    boolInputType.onResized = [](NodeComponent& comp) {
+        if (comp.inputGUIElements.empty()) return;
+        auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+
+        if (!back) return;
+        const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+        const float sides = 20.0f * scale;
+        const float cornerSize = 24.0f * scale;
+        back->setMultiLine(false, false);
+        back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
+        back->applyFontToAllText(back->getFont().withHeight(14 * scale));
+        };
     boolInputType.isBoolean = true;
     boolInputType.alwaysOutputsRuntimeData = false;
     boolInputType.fromScene = nullptr;
@@ -438,8 +499,8 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     // ========= constant =========
     NodeType constantType;
-    constantType.name = "constant";
-    constantType.address = "math/";
+    constantType.name = "constant number";
+    constantType.address = "constants/";
     constantType.tooltip = "Outputs a fixed numeric value.";
     constantType.inputs = {};
     constantType.getOutputSize = outputSize1Known;
@@ -452,34 +513,172 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             node.setProperty("value", 0.0);
             comp.inputGUIElements.push_back(std::make_unique<juce::TextEditor>("value"));
             auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-            back->setJustification(juce::Justification::centred);
-            back->setText("0.0");
+            back->setJustification(juce::Justification::horizontallyCentred);
+            back->setText("");
             back->onTextChange = [&node, &comp]()
                 {
                     auto el = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-                    try {
-                        const double newVal = std::stod(el->getText().toStdString());
-                        node.setProperty("value", newVal);
+                    if (el->getText().isEmpty()) {
+                        node.setProperty("value", 0.0);
                     }
-                    catch (...) {
-                        el->setText(juce::String(node.getNumericProperty("value")));
+                    else {
+                        juce::String s;
+                        for (char c : el->getText()) {
+                            if (c >= '0' && c <= '9') {
+                                s += c;
+                            }
+                            if (c == 'e' || c == 'E' || c == '-' || c == '.' || c == '+') {
+                                s += c;
+                            }
+                        }
+                        el->setText(s, false);
+                        try {
+                            const double newVal = std::stod(el->getText().toStdString());
+                            if (std::isfinite(newVal))
+                            {
+                                node.setProperty("value", newVal);
+                            }
+                            else
+                            {
+                                el->setText(juce::String(node.getNumericProperty("value")), false);
+                            }
+                        }
+                        catch (...) {
+                            el->setText(juce::String(node.getNumericProperty("value")));
+                        }
                     }
                     comp.getOwningScene()->onSceneChanged();
                 };
-            back->setBounds(20, 20, comp.getWidth() - 40, 30);
+            const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            const float cornerSize = 24.0f * scale;
+            back->setMultiLine(false, false);
+            back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
+            back->applyFontToAllText(back->getFont().withHeight(14 * scale));
             comp.addAndMakeVisible(back);
         };
-    constantType.onResized = [](NodeComponent&) {};
+    constantType.onResized = [](NodeComponent& comp) {
+        if (comp.inputGUIElements.empty()) { return; }
+            auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+            if (back) {
+                const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+                const float sides = 20.0f * scale;
+                const float cornerSize = 24.0f * scale;
+                back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
+                back->applyFontToAllText(back->getFont().withHeight(14*scale));
+            }
+
+            
+        };
     constantType.isBoolean = false;
     constantType.alwaysOutputsRuntimeData = false;
     constantType.fromScene = nullptr;
     registry.push_back(constantType);
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("c").getTextDescription(), registry.size() - 1 });
 
+    // ========= constant =========
+    NodeType constantVecType;
+    constantVecType.name = "constant vector";
+    constantVecType.address = "constants/";
+    constantVecType.tooltip = "Outputs a list of fixed numeric values (enter comma separated numbers).";
+    constantVecType.inputs = {};
+    constantVecType.getOutputSize = [](const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>&, RunnerInput&, int, const NodeData& data) {
+        return data.getNumericProperty("size");
+    };
+    constantVecType.execute = [](const NodeData& node, UserInput&, const std::vector<std::span<double>>&, std::span<double>& output, RunnerInput& inlineInstance)
+        {
+            for (int i = 0; i < output.size(); i += 1) {
+                juce::String j = juce::String(i);
+                output[i] = node.getNumericProperty(j);
+            }
+            
+        };
+    constantVecType.buildUI = [](NodeComponent& comp, NodeData& node)
+        {
+            node.setProperty("size", 1.0); // start empty
+
+            comp.inputGUIElements.push_back(std::make_unique<juce::TextEditor>("values"));
+            auto* back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+            back->setJustification(juce::Justification::horizontallyCentred);
+            back->setMultiLine(false, false);
+            back->setText("");
+
+            back->onTextChange = [&node, &comp]()
+                {
+                    auto* el = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+                    if (!el) return;
+
+                    juce::String s;
+                    for (char c : el->getText()) {
+                        if (c >= '0' && c <= '9') {
+                            s += c;
+                        }
+                        if (c == 'e' || c == 'E' || c == '-' || c == '.' || c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '+') {
+                            s += c;
+                        }
+                    }
+                    el->setText(s, false);
+
+                    juce::StringArray tokens;
+                    tokens.addTokens(el->getText(), ",", "");   // split on commas
+                    tokens.removeEmptyStrings();                // drop blanks
+
+                    int count = 0;
+                    node.setProperty(juce::String(0), 0.0);
+                    for (int i = 0; i < tokens.size(); ++i)
+                    {
+                        try
+                        {
+                            const double val = std::stod(tokens[i].toStdString());
+                            if (std::isfinite(val))
+                            {
+                                node.setProperty(juce::String(count++), val);
+                            }
+                        }
+                        catch (...) { /* skip bad tokens */ }
+                    }
+
+                    node.setProperty("size", std::max((double)count, 1.0));
+
+                    // If no valid numbers, reset to size 0
+                    if (count == 0)
+                        node.setProperty("size", 1.0);
+
+                    comp.updateSize();                         // trigger resize
+                    comp.getOwningScene()->onSceneChanged();   // notify scene
+                };
+
+            const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            const float cornerSize = 24.0f * scale;
+            back->setBounds(sides, cornerSize,
+                comp.getWidth() - sides - sides,
+                comp.getHeight() - cornerSize * 2);
+            back->applyFontToAllText(back->getFont().withHeight(14 * scale));
+            comp.addAndMakeVisible(back);
+        };
+
+    constantVecType.onResized = [](NodeComponent& comp) {
+        if (comp.inputGUIElements.empty()) { return; }
+        auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+        if (back) {
+            const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            const float cornerSize = 24.0f * scale;
+            back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
+            back->applyFontToAllText(back->getFont().withHeight(14 * scale));
+        }
+    };
+    constantVecType.isBoolean = false;
+    constantVecType.alwaysOutputsRuntimeData = false;
+    constantVecType.fromScene = nullptr;
+    registry.push_back(constantVecType);
+    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("v").getTextDescription(), registry.size() - 1 });
+
     // ========= constant boolean =========
     NodeType constBoolType;
     constBoolType.name = "constant boolean";
-    constBoolType.address = "logic/";
+    constBoolType.address = "constants/";
     constBoolType.tooltip = "Outputs a fixed boolean (1 or 0).";
     constBoolType.inputs = {};
     constBoolType.getOutputSize = outputSize1Known;
@@ -489,7 +688,6 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         };
     constBoolType.buildUI = [](NodeComponent& comp, NodeData& node)
         {
-            const auto scale = std::pow(2.0, comp.getOwningScene()->logScale);
             comp.inputGUIElements.push_back(std::make_unique<juce::ToggleButton>(juce::String("true/false")));
             auto back = dynamic_cast<juce::ToggleButton*>(comp.inputGUIElements.back().get());
             back->onStateChange = [&]()
@@ -498,21 +696,20 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                     node.setProperty("value", el->getToggleState() ? 1.0 : 0.0);
                     comp.getOwningScene()->onSceneChanged();
                 };
-            int zheight = static_cast<int>(30 * scale);
-            back->setSize(comp.getWidth() - 4, zheight);
-            int height = (comp.getHeight() - zheight) / 2.0;
-            back->setTopLeftPosition(2, height);
+            const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            const float cornerSize = 24.0f * scale;
+            back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
             comp.addAndMakeVisible(back);
         };
     constBoolType.onResized = [](NodeComponent& comp)
         {
             if (comp.inputGUIElements.empty()) { return; }
             auto back = dynamic_cast<juce::ToggleButton*>(comp.inputGUIElements.back().get());
-            const auto scale = std::pow(2.0, comp.getOwningScene()->logScale);
-            int zheight = static_cast<int>(30 * scale);
-            back->setSize(comp.getWidth() - 4, zheight);
-            int height = (comp.getHeight() - zheight) / 2.0;
-            back->setTopLeftPosition(2, height);
+            const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            const float cornerSize = 24.0f * scale;
+            back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
         };
     constBoolType.isBoolean = true;
     constBoolType.alwaysOutputsRuntimeData = false;
@@ -523,7 +720,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= branch =========
     NodeType branchType;
     branchType.name = "branch";
-    branchType.address = "flow/";
+    branchType.address = "math/logic/choice/";
     branchType.tooltip = "Selects between two inputs based on a boolean t/f.";
     branchType.inputs = {
         InputFeatures("true",  false, 0, false),
@@ -551,7 +748,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= comparison node =========
     NodeType comparisonType;
     comparisonType.name = "compare";
-    comparisonType.address = "flow/";
+    comparisonType.address = "math/logic/choice/";
     comparisonType.tooltip = "Selects between 3 inputs based on values of a and b.";
     comparisonType.inputs = {
         InputFeatures("a < b",  false, 0, false),
@@ -590,13 +787,13 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     comparisonType.isBoolean = false;
     comparisonType.alwaysOutputsRuntimeData = false;
     comparisonType.fromScene = nullptr;
-    registry.push_back(branchType);
+    registry.push_back(comparisonType);
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("shift c").getTextDescription(), registry.size() - 1 });
 
     // ========= lerp =========
     NodeType lerpType;
     lerpType.name = "lerp";
-    lerpType.address = "flow/";
+    lerpType.address = "math/blend/";
     lerpType.tooltip = "Linearly blends between two inputs based on \"s\".";
     lerpType.inputs = {
         InputFeatures("a",  false, 0, false),
@@ -624,6 +821,53 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     registry.push_back(lerpType);
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("l").getTextDescription(), registry.size() - 1 });
 
+    // ========= smooth lerp =========
+    NodeType smoothLerpType;
+    smoothLerpType.name = "smooth lerp";
+    smoothLerpType.address = "math/blend/smooth";
+    smoothLerpType.tooltip = "Lerps from a to b using smoothstep(s): s' = s*s*(3-2*s).";
+
+    smoothLerpType.inputs = {
+        InputFeatures("a", false, 0, false),
+        InputFeatures("b", false, 0, false),
+        InputFeatures("s", false, 1, false) // scalar blend
+    };
+
+    smoothLerpType.getOutputSize = outputSizeComponentWise;
+    smoothLerpType.buildUI = [](NodeComponent&, NodeData&) {};
+    smoothLerpType.onResized = [](NodeComponent&) {};
+
+    smoothLerpType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in,
+        std::span<double>& out, RunnerInput&) {
+            // init output
+            for (int i = 0; i < (int)out.size(); ++i) out[i] = 0.0;
+
+            const int n = std::min((int)in[0].size(), (int)in[1].size());
+            if (n == 0 || in[2].empty()) return;
+
+            // read & sanitize s (no asserts; stable fallback)
+            double s = in[2][0];
+            if (!std::isfinite(s)) s = 0.0;
+            if (s < 0.0) s = 0.0;
+            else if (s > 1.0) s = 1.0;
+
+            // cubic smoothstep easing
+            double s2 = s * s;
+            double sSmooth = s2 * (3.0 - 2.0 * s);  // smoothstep
+            double inv = 1.0 - sSmooth;
+
+            for (int i = 0; i < n; ++i) {
+                out[i] = in[0][i] * inv + in[1][i] * sSmooth;
+            }
+        };
+
+    smoothLerpType.isBoolean = false;
+    smoothLerpType.alwaysOutputsRuntimeData = false;
+    smoothLerpType.fromScene = nullptr;
+    registry.push_back(smoothLerpType);
+    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("shift l").getTextDescription(), registry.size() - 1 });
+
+
     // ========= time since app started =========
     NodeType timeType;
     timeType.name = "time since app started";
@@ -648,7 +892,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= not =========
     NodeType notType;
     notType.name = "not";
-    notType.address = "logic/";
+    notType.address = "math/logic/";
     notType.tooltip = "Logical NOT (1 if input == 0, else 0).";
     notType.inputs = { InputFeatures("a", true, 0, false) };
     notType.getOutputSize = outputSizeEqualsSingleInputSize;
@@ -668,7 +912,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= and =========
     NodeType andType;
     andType.name = "and";
-    andType.address = "logic/";
+    andType.address = "math/logic/";
     andType.tooltip = "Logical AND component-wise (nonzero treated as true).";
     andType.inputs = { InputFeatures("x", true, 0, false), InputFeatures("y", true, 0, false) };
     andType.getOutputSize = outputSizeComponentWise;
@@ -692,7 +936,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= or =========
     NodeType orType;
     orType.name = "or";
-    orType.address = "logic/";
+    orType.address = "math/logic/";
     orType.tooltip = "Logical OR component-wise (nonzero treated as true).";
     orType.inputs = { InputFeatures("x", true, 0, false), InputFeatures("y", true, 0, false) };
     orType.getOutputSize = outputSizeComponentWise;
@@ -819,7 +1063,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ======== VST / audio inputs ========
     NodeType sidechainType;
     sidechainType.name = "sidechain";
-    sidechainType.address = "vst/";
+    sidechainType.address = "audio/vst/";
     sidechainType.tooltip = "Sidechain input (L or R depending on channel).";
     sidechainType.inputs = {};
     sidechainType.getOutputSize = outputSize1Known;
@@ -837,7 +1081,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType leftInType;
     leftInType.name = "left input";
-    leftInType.address = "vst/";
+    leftInType.address = "audio/vst/";
     leftInType.tooltip = "Current frame's left-channel input sample.";
     leftInType.inputs = {};
     leftInType.getOutputSize = outputSize1Known;
@@ -855,7 +1099,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType rightInType;
     rightInType.name = "right input";
-    rightInType.address = "vst/";
+    rightInType.address = "audio/vst/";
     rightInType.tooltip = "Current frame's right-channel input sample.";
     rightInType.inputs = {};
     rightInType.getOutputSize = outputSize1Known;
@@ -873,7 +1117,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType stereoInType;
     stereoInType.name = "stereo input";
-    stereoInType.address = "vst/";
+    stereoInType.address = "audio/vst/";
     stereoInType.tooltip = "Selects L or R for the current channel pass.";
     stereoInType.inputs = {};
     stereoInType.getOutputSize = outputSize1Known;
@@ -893,7 +1137,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ======== MIDI ========
     NodeType noteOnType;
     noteOnType.name = "note on";
-    noteOnType.address = "midi/";
+    noteOnType.address = "audio/midi/";
     noteOnType.tooltip = "True if a given MIDI note (0,...,127) is currently on.";
     noteOnType.inputs = { InputFeatures("note ID", false, 0, false) };
     noteOnType.getOutputSize = outputSizeEqualsSingleInputSize;
@@ -914,10 +1158,10 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType velocity;
     velocity.name = "velocity";
-    velocity.address = "midi/";
+    velocity.address = "audio/midi/";
     velocity.tooltip = "Vector of 128 values for all MIDI note velocities";
     velocity.inputs = {};
-    velocity.getOutputSize = [](const std::vector<NodeData*>&, const std::vector<std::vector<double>>&, RunnerInput&, int) { return 128; };
+    velocity.getOutputSize = outputSizeAllMidi;
     velocity.buildUI = [](NodeComponent&, NodeData&) {};
     velocity.onResized = [](NodeComponent&) {};
     velocity.execute = [](const NodeData&, UserInput& userInput, const std::vector<std::span<double>>&, std::span<double>& output, RunnerInput& inlineInstance)
@@ -931,12 +1175,12 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     velocity.alwaysOutputsRuntimeData = true;
     velocity.fromScene = nullptr;
     registry.push_back(velocity);
-    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("v").getTextDescription(), registry.size() - 1 });
+    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("shift v").getTextDescription(), registry.size() - 1 });
 
 
     NodeType pitchWheelType;
     pitchWheelType.name = "pitch wheel";
-    pitchWheelType.address = "midi/";
+    pitchWheelType.address = "audio/midi/";
     pitchWheelType.tooltip = "Current MIDI pitch wheel value (runtime).";
     pitchWheelType.inputs = {};
     pitchWheelType.getOutputSize = outputSize1Known;
@@ -954,10 +1198,10 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType allNotesType;
     allNotesType.name = "all note states";
-    allNotesType.address = "midi/";
+    allNotesType.address = "audio/midi/";
     allNotesType.tooltip = "Vector of 128 booleans for all MIDI notes.";
     allNotesType.inputs = {};
-    allNotesType.getOutputSize = [](const std::vector<NodeData*>&, const std::vector<std::vector<double>>&, RunnerInput&, int) { return 128; };
+    allNotesType.getOutputSize = outputSizeAllMidi;
     allNotesType.buildUI = [](NodeComponent&, NodeData&) {};
     allNotesType.onResized = [](NodeComponent&) {};
     allNotesType.execute = [](const NodeData&, UserInput& userInput, const std::vector<std::span<double>>&, std::span<double>& output, RunnerInput& inlineInstance)
@@ -972,10 +1216,10 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType waveCycleType;
     waveCycleType.name = "wave cycle";
-    waveCycleType.address = "midi/";
+    waveCycleType.address = "audio/midi/";
     waveCycleType.tooltip = "Per-note cycle phase in [0,1) for 128 MIDI notes.";
     waveCycleType.inputs = {};
-    waveCycleType.getOutputSize = [](const std::vector<NodeData*>&, const std::vector<std::vector<double>>&, RunnerInput&, int) { return 128; };
+    waveCycleType.getOutputSize = outputSizeAllMidi;
     waveCycleType.buildUI = [](NodeComponent&, NodeData&) {};
     waveCycleType.onResized = [](NodeComponent&) {};
     waveCycleType.execute = [](const NodeData&, UserInput& userInput, const std::vector<std::span<double>>&, std::span<double>& output, RunnerInput& inlineInstance)
@@ -991,7 +1235,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ======== Reductions / vector ops ========
     NodeType sumType;
     sumType.name = "sum";
-    sumType.address = "vector/reductions/";
+    sumType.address = "math/vector/reductions/";
     sumType.tooltip = "Sum of all elements.";
     sumType.inputs = { InputFeatures("x", false, 0, false) };
     sumType.getOutputSize = outputSize1Known;
@@ -1011,7 +1255,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType avgType;
     avgType.name = "average";
-    avgType.address = "vector/reductions/";
+    avgType.address = "math/vector/reductions/";
     avgType.tooltip = "Arithmetic mean of all elements.";
     avgType.inputs = { InputFeatures("x", false, 0, false) };
     avgType.getOutputSize = outputSize1Known;
@@ -1030,8 +1274,8 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("alt a").getTextDescription(), registry.size() - 1 });
 
     NodeType maxType;
-    maxType.name = "max";
-    maxType.address = "vector/reductions/";
+    maxType.name = "max element";
+    maxType.address = "math/vector/reductions/";
     maxType.tooltip = "Maximum element.";
     maxType.inputs = { InputFeatures("x", false, 0, false) };
     maxType.getOutputSize = outputSize1Known;
@@ -1051,8 +1295,8 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("alt m").getTextDescription(), registry.size() - 1 });
 
     NodeType minType;
-    minType.name = "min";
-    minType.address = "vector/reductions/";
+    minType.name = "min element";
+    minType.address = "math/vector/reductions/";
     minType.tooltip = "Minimum element.";
     minType.inputs = { InputFeatures("x", false, 0, false) };
     minType.getOutputSize = outputSize1Known;
@@ -1073,7 +1317,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType getElemType;
     getElemType.name = "get element";
-    getElemType.address = "vector/ops/";
+    getElemType.address = "math/vector/ops/";
     getElemType.tooltip = "Reads element at index from a vector.";
     getElemType.inputs = { InputFeatures("vector", false, 0, false), InputFeatures("index", false, 1, false) };
     getElemType.getOutputSize = outputSize1Known;
@@ -1094,8 +1338,8 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType sliceElemType;
    sliceElemType.name = "vector slice";
-   sliceElemType.address = "vector/ops/";
-   sliceElemType.tooltip = "Reads element at index from a vector.";
+   sliceElemType.address = "math/vector/ops/";
+   sliceElemType.tooltip = "Reads elements at all indices from a vector.";
    sliceElemType.inputs = { InputFeatures("vector", false, 0, false), InputFeatures("indices", false, 0, false) };
    sliceElemType.getOutputSize = outputSizeByInputPin(1);
    sliceElemType.buildUI = [](NodeComponent&, NodeData&) {};
@@ -1119,7 +1363,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType changeElemType;
     changeElemType.name = "change element";
-    changeElemType.address = "vector/ops/";
+    changeElemType.address = "math/vector/ops/";
     changeElemType.tooltip = "Copies vector and overwrites one element by index.";
     changeElemType.inputs = {
         InputFeatures("vector", false, 0, false),
@@ -1146,7 +1390,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType rangeType;
     rangeType.name = "range";
-    rangeType.address = "vector/create/";
+    rangeType.address = "math/vector/create/";
     rangeType.tooltip = "Creates a sequence: start, start+step, ... (step count items).";
     rangeType.inputs = {
         InputFeatures("start",      false, 1, false),
@@ -1154,10 +1398,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         InputFeatures("step size",  false, 1, false)
     };
     for (auto& f : rangeType.inputs) f.defaultValue = 1.0;
-    rangeType.getOutputSize = [](const std::vector<NodeData*>&, const std::vector<std::vector<double>>& s, RunnerInput&, int)
-        {
-            return std::max(1,static_cast<int>(std::round(s[1][0])));
-        };
+    rangeType.getOutputSize = outputSizeFromInputScalar(1);
     rangeType.buildUI = [](NodeComponent&, NodeData&) {};
     rangeType.onResized = [](NodeComponent&) {};
     rangeType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& inputs, std::span<double>& output, RunnerInput& inlineInstance)
@@ -1174,10 +1415,36 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     registry.push_back(rangeType);
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("r").getTextDescription(), registry.size() - 1 });
 
+    NodeType repeatType;
+    repeatType.name = "repeat";
+    repeatType.address = "math/vector/create/";
+    repeatType.tooltip = "Repeats the value x n times.";
+    repeatType.inputs = {
+        InputFeatures("x",      false, 1, false),
+        InputFeatures("n", false, 1, true)
+    };
+    repeatType.inputs[1].defaultValue = 1.0;
+    repeatType.getOutputSize = outputSizeFromInputScalar(1);
+    repeatType.buildUI = [](NodeComponent&, NodeData&) {};
+    repeatType.onResized = [](NodeComponent&) {};
+    repeatType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& inputs, std::span<double>& output, RunnerInput& inlineInstance)
+        {
+            int stepCount = static_cast<int>(std::round(inputs[1][0]));
+            double value = inputs[0][0];
+            for (int i = 0; i < stepCount; ++i) { output[i] = value; }
+        };
+    repeatType.isBoolean = false;
+    repeatType.alwaysOutputsRuntimeData = false;
+    repeatType.fromScene = nullptr;
+    registry.push_back(repeatType);
+    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("shift r").getTextDescription(), registry.size() - 1 });
+
+
+
     // ======== Waves ========
     NodeType sinWaveType;
     sinWaveType.name = "sin wave";
-    sinWaveType.address = "waves/";
+    sinWaveType.address = "audio/waves/";
     sinWaveType.tooltip = "Sine from phase in [0,1): sin(2π * phase).";
     sinWaveType.inputs = { InputFeatures("wave cycle", false, 0, false) };
     sinWaveType.getOutputSize = outputSizeEqualsSingleInputSize;
@@ -1196,7 +1463,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType squareType;
     squareType.name = "square";
-    squareType.address = "waves/";
+    squareType.address = "audio/waves/";
     squareType.tooltip = "Square from phase in [0,1): outputs +1 or −1 at 0.5 threshold.";
     squareType.inputs = { InputFeatures("wave cycle", false, 0, false) };
     squareType.getOutputSize = outputSizeEqualsSingleInputSize;
@@ -1215,7 +1482,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     NodeType triangleType;
     triangleType.name = "zigzag";
-    triangleType.address = "waves/";
+    triangleType.address = "audio/waves/";
     triangleType.tooltip = "Triangle wave from phase in [0,1), scaled to [-1,1].";
     triangleType.inputs = { InputFeatures("wave cycle", false, 0, false) };
     triangleType.getOutputSize = outputSizeEqualsSingleInputSize;
@@ -1235,10 +1502,37 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     registry.push_back(triangleType);
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("z").getTextDescription(), registry.size() - 1 });
 
+    NodeType circleWaveType;
+    circleWaveType.name = "circle";
+    circleWaveType.address = "audio/waves/";
+    circleWaveType.tooltip = "Semicircle wave from phase in [0,1), scaled to [-1,1].";
+    circleWaveType.inputs = { InputFeatures("wave cycle", false, 0, false) };
+    circleWaveType.getOutputSize = outputSizeEqualsSingleInputSize;
+    circleWaveType.buildUI = [](NodeComponent&, NodeData&) {};
+    circleWaveType.onResized = [](NodeComponent&) {};
+    circleWaveType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& inputs, std::span<double>& output, RunnerInput& inlineInstance)
+        {
+            for (int i = 0; i < static_cast<int>(output.size()); ++i) {
+                double x = inputs[0][i];
+                double t = x - std::floor(x);   
+                double m = 2.0 * t;                
+                double k = std::floor(m);       
+                double u = 2.0 * (m - k) - 1.0;    
+                double a = std::sqrt(std::max(0.0, 1.0 - u * u));
+                output[i] = (1.0 - 2.0 * k) * a;
+            }
+        };
+    circleWaveType.isBoolean = false;
+    circleWaveType.alwaysOutputsRuntimeData = false;
+    circleWaveType.fromScene = nullptr;
+    registry.push_back(circleWaveType);
+    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("z").getTextDescription(), registry.size() - 1 });
+
+
     // ======== Envelope (ADSR, per MIDI note) ========
     NodeType envelopeType;
     envelopeType.name = "envelope (ADSR)";
-    envelopeType.address = "midi/envelopes/";
+    envelopeType.address = "audio/midi/envelopes/";
     envelopeType.tooltip = "Per-note ADSR: outputs 128 values in [0,1] from note start/end and ADSR times.";
     envelopeType.inputs = {
         // scalar controls (seconds for A/D/R; [0,1] for sustain)
@@ -1251,9 +1545,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     envelopeType.inputs[0].defaultValue = 0.2;
     envelopeType.inputs[0].defaultValue = 0.8;
     envelopeType.inputs[0].defaultValue = 0.3;
-    envelopeType.getOutputSize = [](const std::vector<NodeData*>&, const std::vector<std::vector<double>>&, RunnerInput&, int) {
-        return 128; // one slot per MIDI note
-        };
+    envelopeType.getOutputSize = outputSizeAllMidi;
     envelopeType.buildUI = [](NodeComponent&, NodeData&) {};
     envelopeType.onResized = [](NodeComponent&) {};
     envelopeType.isBoolean = false;
@@ -1906,7 +2198,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= XOR / NAND / NOR / XNOR (component-wise boolean) =========
     
     {
-        NodeType t; t.name = "xor"; t.address = "logic/binary ops/"; t.tooltip = "Boolean XOR component-wise.";
+        NodeType t; t.name = "xor"; t.address = "math/logic/binary ops/"; t.tooltip = "Boolean XOR component-wise.";
         t.inputs = { InputFeatures("x", true, 0, false), InputFeatures("y", true, 0, false) };
         t.getOutputSize = outputSizeComponentWise; t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -1920,7 +2212,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = true; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "nand"; t.address = "logic/binary ops/"; t.tooltip = "NOT (x AND y) component-wise.";
+        NodeType t; t.name = "nand"; t.address = "math/logic/binary ops/"; t.tooltip = "NOT (x AND y) component-wise.";
         t.inputs = { InputFeatures("x", true, 0, false), InputFeatures("y", true, 0, false) };
         t.getOutputSize = outputSizeComponentWise; t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -1933,7 +2225,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = true; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "nor"; t.address = "logic/binary ops/"; t.tooltip = "NOT (x OR y) component-wise.";
+        NodeType t; t.name = "nor"; t.address = "math/logic/binary ops/"; t.tooltip = "NOT (x OR y) component-wise.";
         t.inputs = { InputFeatures("x", true, 0, false), InputFeatures("y", true, 0, false) };
         t.getOutputSize = outputSizeComponentWise; t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -1946,7 +2238,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = true; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "xnor"; t.address = "logic/binary ops/"; t.tooltip = "NOT XOR component-wise (equality).";
+        NodeType t; t.name = "xnor"; t.address = "math/logic/binary ops/"; t.tooltip = "NOT XOR component-wise (equality).";
         t.inputs = { InputFeatures("x", true, 0, false), InputFeatures("y", true, 0, false) };
         t.getOutputSize = outputSizeComponentWise; t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -1963,11 +2255,11 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= where (vectorized branch) =========
     {
         NodeType t;
-        t.name = "where"; t.address = "flow/"; t.tooltip = "Vectorized branch: out[i] = cond[i]? a[i] : b[i]. If cond is padded, defaults to picking a.";
+        t.name = "where"; t.address = "math/logic/choice/"; t.tooltip = "Vectorized branch: out[i] = cond[i]? a[i] : b[i]. If cond is padded, defaults to picking a.";
         t.inputs = {
             InputFeatures("cond", true, 0, false),
-            InputFeatures("a",    false,0, false),
-            InputFeatures("b",    false,0, false)
+            InputFeatures("a", false,0, false),
+            InputFeatures("b", false,0, false)
         };
         t.getOutputSize = outputSizeComponentWise;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
@@ -1994,7 +2286,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     // ========= is between / is not between (inclusive) =========
     {
-        NodeType t; t.name = "is between"; t.address = "logic/compare/"; t.tooltip = "Inclusive: lo <= x <= hi. lo, hi are scalars.";
+        NodeType t; t.name = "is between"; t.address = "math/logic/compare/"; t.tooltip = "Inclusive: lo <= x <= hi. lo, hi are scalars.";
         t.inputs = { InputFeatures("x", false,0,false), InputFeatures("lo", false,1,false), InputFeatures("hi", false,1,false) };
         t.getOutputSize = outputSizeEqualsSingleInputSize; t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2004,7 +2296,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = true; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "is not between"; t.address = "logic/compare/"; t.tooltip = "Complement of 'is between'.";
+        NodeType t; t.name = "is not between"; t.address = "math/logic/compare/"; t.tooltip = "Complement of 'is between'.";
         t.inputs = { InputFeatures("x", false,0,false), InputFeatures("lo", false,1,false), InputFeatures("hi", false,1,false) };
         t.getOutputSize = outputSizeEqualsSingleInputSize; t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2016,7 +2308,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     // ========= Boolean reductions =========
     {
-        NodeType t; t.name = "any true"; t.address = "vector/reductions/boolean/"; t.tooltip = "1 if any element is nonzero, else 0.";
+        NodeType t; t.name = "any true"; t.address = "math/vector/reductions/boolean/"; t.tooltip = "1 if any element is nonzero, else 0.";
         t.inputs = { InputFeatures("x", true, 0, false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2025,7 +2317,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = true; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "any false"; t.address = "vector/reductions/boolean/"; t.tooltip = "1 if any element is zero, else 0.";
+        NodeType t; t.name = "any false"; t.address = "math/vector/reductions/boolean/"; t.tooltip = "1 if any element is zero, else 0.";
         t.inputs = { InputFeatures("x", true, 0, false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2034,7 +2326,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = true; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "all true"; t.address = "vector/reductions/boolean/"; t.tooltip = "1 if all elements are nonzero (empty -> 1).";
+        NodeType t; t.name = "all true"; t.address = "math/vector/reductions/boolean/"; t.tooltip = "1 if all elements are nonzero (empty -> 1).";
         t.inputs = { InputFeatures("x", true, 0, false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2043,7 +2335,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = true; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "all false"; t.address = "vector/reductions/boolean/"; t.tooltip = "1 if all elements are zero (empty -> 1).";
+        NodeType t; t.name = "all false"; t.address = "math/vector/reductions/boolean/"; t.tooltip = "1 if all elements are zero (empty -> 1).";
         t.inputs = { InputFeatures("x", true, 0, false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2052,7 +2344,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = true; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "count true"; t.address = "vector/reductions/boolean/"; t.tooltip = "Counts nonzero elements.";
+        NodeType t; t.name = "count true"; t.address = "math/vector/reductions/boolean/"; t.tooltip = "Counts nonzero elements.";
         t.inputs = { InputFeatures("x", true, 0, false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2061,7 +2353,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = false; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "count false"; t.address = "vector/reductions/boolean/"; t.tooltip = "Counts zeros.";
+        NodeType t; t.name = "count false"; t.address = "math/vector/reductions/boolean/"; t.tooltip = "Counts zeros.";
         t.inputs = { InputFeatures("x", true, 0, false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2073,11 +2365,11 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= concat (a || b) =========
     {
         NodeType t;
-        t.name = "concat"; t.address = "vector/ops/"; t.tooltip = "Concatenate a then b.";
+        t.name = "concat"; t.address = "math/vector/ops/"; t.tooltip = "Concatenate a then b.";
         t.inputs = { InputFeatures("a", false,0,false), InputFeatures("b", false,0,false) };
-        t.getOutputSize = [](const std::vector<NodeData*>& nodes, const std::vector<std::vector<double>>&, RunnerInput& ri, int) {
-            int as = (nodes.size() > 0 && nodes[0]) ? nodes[0]->getCompileTimeSize(&ri) : 0;
-            int bs = (nodes.size() > 1 && nodes[1]) ? nodes[1]->getCompileTimeSize(&ri) : 0;
+        t.getOutputSize = [](const std::vector<NodeData*>& nodes, const std::vector<std::vector<double>>& s, RunnerInput& ri, int, const NodeData&) {
+            int as = (nodes.size() > 0 && s[0].size());
+            int bs = (nodes.size() > 1 && s[1].size());
             return as + bs;
             };
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
@@ -2090,14 +2382,14 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= pad_to (truncate or pad with value) =========
     {
         NodeType t;
-        t.name = "pad to"; t.address = "vector/ops/"; t.tooltip = "Resize to N: copy then pad with value.";
+        t.name = "pad to"; t.address = "math/vector/ops/"; t.tooltip = "Resize to N: copy then pad with value.";
         t.inputs = {
             InputFeatures("x",     false,0,false),
             InputFeatures("sizeN", false,1,true),
             InputFeatures("value", false,1,false)
         };
         t.inputs[2].defaultValue = 0.0;
-        t.getOutputSize = [](const std::vector<NodeData*>&, const std::vector<std::vector<double>>& s, RunnerInput&, int) {
+        t.getOutputSize = [](const std::vector<NodeData*>&, const std::vector<std::vector<double>>& s, RunnerInput&, int, const NodeData&) {
             const int N = (s.size() > 1 && !s[1].empty()) ? (int)std::max(0.0, std::round(s[1][0])) : 0;
             return N;
             };
@@ -2114,10 +2406,10 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= append zeros =========
     {
         NodeType t;
-        t.name = "append zeros"; t.address = "vector/ops/"; t.tooltip = "Append K zeros to x.";
+        t.name = "append zeros"; t.address = "math/vector/ops/"; t.tooltip = "Append K zeros to x.";
         t.inputs = { InputFeatures("x", false,0,false), InputFeatures("K", false,1,true) };
-        t.getOutputSize = [](const std::vector<NodeData*>& nodes, const std::vector<std::vector<double>>& s, RunnerInput& ri, int) {
-            int xs = (nodes.size() > 0 && nodes[0]) ? nodes[0]->getCompileTimeSize(&ri) : 0;
+        t.getOutputSize = [](const std::vector<NodeData*>& nodes, const std::vector<std::vector<double>>& s, RunnerInput& ri, int, const NodeData&) {
+            int xs = s[0].size();
             int K = (s.size() > 1 && !s[1].empty()) ? (int)std::max(0.0, std::round(s[1][0])) : 0;
             return xs + K;
             };
@@ -2133,7 +2425,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= reverse =========
     {
         NodeType t;
-        t.name = "reverse"; t.address = "vector/ops/"; t.tooltip = "Reverse order of elements.";
+        t.name = "reverse"; t.address = "math/vector/ops/"; t.tooltip = "Reverse order of elements.";
         t.inputs = { InputFeatures("x", false,0,false) }; t.getOutputSize = outputSizeEqualsSingleInputSize;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2145,12 +2437,12 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= interleave (a0,b0,a1,b1,...) then remainder =========
     {
         NodeType t;
-        t.name = "interleave"; t.address = "vector/ops/"; t.tooltip = "Alternate elements from a and b; append remainder.";
+        t.name = "interleave"; t.address = "math/vector/ops/"; t.tooltip = "Alternate elements from a and b; append remainder.";
         t.inputs = { InputFeatures("a", false,0,false), InputFeatures("b", false,0,false) };
-        t.getOutputSize = [](const std::vector<NodeData*>& nodes, const std::vector<std::vector<double>>&, RunnerInput& ri, int) {
-            int as = (nodes.size() > 0 && nodes[0]) ? nodes[0]->getCompileTimeSize(&ri) : 0;
-            int bs = (nodes.size() > 1 && nodes[1]) ? nodes[1]->getCompileTimeSize(&ri) : 0;
-            return as + bs;
+        t.getOutputSize = [](const std::vector<NodeData*>& nodes, const std::vector<std::vector<double>>&s, RunnerInput& ri, int, const NodeData&) {
+            int as = s[0].size();
+            int bs = s[1].size();
+            return std::max(1,as + bs);
             };
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2165,7 +2457,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 
     // ========= argmax / argmin =========
     {
-        NodeType t; t.name = "argmax"; t.address = "vector/reductions/"; t.tooltip = "Index of first maximum (0 if empty).";
+        NodeType t; t.name = "argmax"; t.address = "math/vector/reductions/"; t.tooltip = "Index of first maximum (0 if empty).";
         t.inputs = { InputFeatures("x", false,0,false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2175,7 +2467,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = false; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
     {
-        NodeType t; t.name = "argmin"; t.address = "vector/reductions/"; t.tooltip = "Index of first minimum (0 if empty).";
+        NodeType t; t.name = "argmin"; t.address = "math/vector/reductions/"; t.tooltip = "Index of first minimum (0 if empty).";
         t.inputs = { InputFeatures("x", false,0,false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2199,7 +2491,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ======== sliding window
     {
         NodeType t;
-        t.name = "sliding window"; t.address = "filters/"; t.tooltip = "Computes weighted average of the last n audio samples (n = weights.size - 1)";
+        t.name = "sliding window"; t.address = "audio/filters/"; t.tooltip = "Computes weighted average of the last n audio samples (n = weights.size - 1)";
 		t.inputs = { InputFeatures("current sample", false, 1, false), InputFeatures("weights", false, 0, false)}; t.getOutputSize = outputSize1Known;
 		t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
 		t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2214,7 +2506,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ======== sliding window
     {
         NodeType t;
-		t.name = "FIR filter"; t.address = "filters/"; t.tooltip = "Averages current input with n previous samples. As n increases, this node takes longer to compute but filters out more high frequencies.";
+		t.name = "FIR filter"; t.address = "audio/filters/"; t.tooltip = "Averages current input with n previous samples. As n increases, this node takes longer to compute but filters out more high frequencies.";
 		t.inputs = { InputFeatures("current sample", false, 1, false), InputFeatures("n", false, 1, false) }; t.getOutputSize = outputSize1Known;
 		t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
         t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2234,7 +2526,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ======== get old samples
     {
         NodeType t;
-        t.name = "get old samples"; t.address = "timeseries/"; t.tooltip = "For each input index, gets the sample that many frames ago";
+        t.name = "get past samples"; t.address = "time/"; t.tooltip = "For each input index, gets the sample that many frames ago";
         t.inputs = { InputFeatures("indices", false, 0, false) }; t.getOutputSize = outputSizeEqualsSingleInputSize;
         t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
         t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2250,7 +2542,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= set storeable value 
     {
         NodeType t;
-        t.name = "set stored value"; t.address = "storage/"; t.tooltip = "Stores a value during execution that can be read next frame. outputs value";
+        t.name = "set stored value"; t.address = "utility/"; t.tooltip = "Stores a value during execution that can be read next frame. outputs value";
         t.inputs = { InputFeatures("key", false, 1, false), InputFeatures("value", false, 1, false) }; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
         t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput& r) {
@@ -2268,7 +2560,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= set storeable value 
     {
         NodeType t;
-        t.name = "get stored value"; t.address = "storage/"; t.tooltip = "Outputs a specific stored value from the previous frame";
+        t.name = "get stored value"; t.address = "utility/"; t.tooltip = "Outputs a specific stored value from the previous frame";
         t.inputs = { InputFeatures("key", false, 1, false)}; t.getOutputSize = outputSize1Known;
         t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
         t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
@@ -2280,4 +2572,56 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.isBoolean = false; t.alwaysOutputsRuntimeData = true; t.fromScene = nullptr; registry.push_back(t);
     }
 
+    // ========= white noise
+    {
+        NodeType t;
+        t.name = "white noise"; t.address = "math/noise/random/"; t.tooltip = "Generates n random values between a and b";
+        t.inputs = { InputFeatures("a", false, 1, false), InputFeatures("b", false, 1, false), InputFeatures("n", false, 1, true) };
+        t.inputs[0].defaultValue = 0.0;
+        t.inputs[1].defaultValue = 1.0;
+        t.inputs[2].defaultValue = 1.0;
+        t.buildUI = [](NodeComponent& nc, NodeData& nd) {}; t.getOutputSize = outputSizeFromInputScalar(2);
+        t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
+            double a = in[0][0];
+            double b = in[1][0];
+            for (int i = 0; i < out.size(); i += 1) {
+                out[i] = uniform_closed(a,b);
+            }
+        };
+        t.isBoolean = false; t.alwaysOutputsRuntimeData = true; t.fromScene = nullptr; registry.push_back(t);
+    }
+
+    // ========= white noise
+    {
+        NodeType t;
+        t.name = "bernoulli noise"; t.address = "math/noise/random/"; t.tooltip = "Generates (t/f) n times";
+        t.inputs = { InputFeatures("n", false, 1, true) };
+        t.inputs[0].defaultValue = 1.0;
+        t.buildUI = [](NodeComponent& nc, NodeData& nd) {}; t.getOutputSize = outputSizeFromInputScalar(0);
+        t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
+            double a = in[0][0];
+            double b = in[1][0];
+            for (int i = 0; i < out.size(); i += 1) {
+                out[i] = coin_flip();
+            }
+            };
+        t.isBoolean = true; t.alwaysOutputsRuntimeData = true; t.fromScene = nullptr; registry.push_back(t);
+    }
+    // ========= deterministic white noise
+    {
+        NodeType t;
+        t.name = "deterministic white noise"; t.address = "math/noise/deterministic/"; t.tooltip = "Generates a uniformly distributed value between a and b for each number in \"hash keys\"";
+        t.inputs = { InputFeatures("hash keys", false, 0, false), InputFeatures("a", false, 1, false), InputFeatures("b", false, 1, false)};
+        t.inputs[2].defaultValue = 1.0;
+        t.buildUI = [](NodeComponent& nc, NodeData& nd) {}; t.getOutputSize = outputSizeByInputPin(0);
+        t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<double>>& in, std::span<double>& out, RunnerInput&) {
+            double a = in[1][0];
+            double b = in[2][0];
+            if (a > b) { std::swap(a, b); }
+            for (int i = 0; i < out.size(); i += 1) {
+                out[i] = deterministic_uniform_closed(a, b, in[0][i]);
+            }
+        };
+        t.isBoolean = false; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
+    }
 }

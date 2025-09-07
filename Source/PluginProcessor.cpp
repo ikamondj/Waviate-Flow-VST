@@ -26,13 +26,14 @@ WaviateFlow2025AudioProcessor::WaviateFlow2025AudioProcessor()
         userInput.noteHz[i] = noteHzOfficialValues[i] = 440.0 * std::pow(2.0, (i - 69) / 12.0);
         userInput.noteVelocity[i] = 0.0;
         userInput.notesOn[i] = 0.0;
-        userInput.noteStartFrame[0] = -100000000;
-        userInput.noteEndFrame[0] = 0.0;
+        userInput.noteStartFrame[i] = -100000000;
+        userInput.noteEndFrame[i] = 0.0;
     }
     // Always create the "main" scene
     initializeRegistry();
     updateRegistryFull();
     audibleScene = nullptr;
+    scenes.reserve(8192);
     if (scenes.empty()) {
         addScene("main");
         audibleScene = activeScene = scenes[0].get();
@@ -247,8 +248,8 @@ void WaviateFlow2025AudioProcessor::processBlock (juce::AudioBuffer<float>& buff
                     }
                 }
 
-                userInput.leftInputHistory.add(outR[sample] = 10.0 * std::tanh(outR[sample] * 0.1));
-                userInput.rightInputHistory.add(outL[sample] = 10.0 * std::tanh(outL[sample] * 0.1));
+                userInput.rightInputHistory.add(outR[sample] = 10.0 * std::tanh(outR[sample] * 0.1));
+                userInput.leftInputHistory.add(outL[sample] = 10.0 * std::tanh(outL[sample] * 0.1));
             }
         }
     }
