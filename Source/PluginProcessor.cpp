@@ -30,10 +30,11 @@ WaviateFlow2025AudioProcessor::WaviateFlow2025AudioProcessor()
         userInput.noteEndFrame[i] = 0.0;
     }
     // Always create the "main" scene
+    registry.reserve(65536);
     initializeRegistry();
     updateRegistryFull();
     audibleScene = nullptr;
-    scenes.reserve(8192);
+    scenes.reserve(1048576);
     if (scenes.empty()) {
         addScene("main");
         audibleScene = activeScene = scenes[0].get();
@@ -457,4 +458,21 @@ void WaviateFlow2025AudioProcessor::swapToNextRunner()
 }
 
 SceneComponent* WaviateFlow2025AudioProcessor::getAudibleScene() { return audibleScene; }
+
+uint16_t WaviateFlow2025AudioProcessor::getCurrentLoadedTypeIndex()
+{
+    uint16_t result =  currentLoadedTypeIndex++;
+    if (currentLoadedTypeIndex == 0) {
+        ++currentLoadedUserIndex;
+    }
+    return result;
+}
+
+uint64_t WaviateFlow2025AudioProcessor::getCurrentLoadedUserIndex()
+{
+    if (currentLoadedUserIndex >= 16) {
+        throw std::out_of_range("Too many loaded Node Types!");
+    }
+    return currentLoadedUserIndex;
+}
 

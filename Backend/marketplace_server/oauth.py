@@ -2,7 +2,6 @@ from typing import Callable, Any, Dict, Optional
 from urllib.parse import urlencode
 import requests
 
-
 class OAuthProvider:
     def __init__(
         self,
@@ -216,6 +215,48 @@ class OAuthProvider:
         return OAuthProvider(
             authorize_url="https://www.facebook.com/v12.0/dialog/oauth",
             token_url="https://graph.facebook.com/v12.0/oauth/access_token",
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri=redirect_uri,
+            get_authorization_params=get_authorization_params,
+            fetch_token=fetch_token,
+            get_user_info=get_user_info,
+        )
+    
+    @staticmethod
+    def create_apple(client_id: str, client_secret: str, redirect_uri: str) -> "OAuthProvider":
+        def get_authorization_params(state):
+            return {
+                "client_id": client_id,
+                "redirect_uri": redirect_uri,
+                "response_type": "code",
+                "scope": "name email",
+                "state": state,
+                "response_mode": "form_post"
+            }
+
+        def fetch_token(code):
+            data = {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri,
+            }
+            headers = {"Content-Type": "application/x-www-form-urlencoded"}
+            resp = requests.post("https://appleid.apple.com/auth/token", data=data, headers=headers)
+            resp.raise_for_status()
+            return resp.json()
+
+        def get_user_info(access_token):
+            # Apple does not provide a userinfo endpoint.
+            # The user's info (email, name) is only available in the initial authorization response.
+            # Here, we just return the access_token.
+            return {"access_token": access_token}
+
+        return OAuthProvider(
+            authorize_url="https://appleid.apple.com/auth/authorize",
+            token_url="https://appleid.apple.com/auth/token",
             client_id=client_id,
             client_secret=client_secret,
             redirect_uri=redirect_uri,

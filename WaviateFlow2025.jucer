@@ -6,8 +6,22 @@
   <MAINGROUP id="h4dz7N" name="WaviateFlow2025">
     <GROUP id="{CFBFC01F-0A0E-7A20-8E13-2744F9F342F7}" name="Source">
       <GROUP id="{01F3D01E-8826-B8F6-07E0-3F20024851F1}" name="Network">
+        <FILE id="dlw9KV" name="JWTManager.cpp" compile="1" resource="0" file="Source/JWTManager.cpp"/>
+        <FILE id="JN1lla" name="JWTManager.h" compile="0" resource="0" file="Source/JWTManager.h"/>
+        <FILE id="UhHndm" name="MarketplaceInterface.cpp" compile="1" resource="0"
+              file="Source/MarketplaceInterface.cpp"/>
+        <FILE id="si9gz1" name="MarketplaceInterface.h" compile="0" resource="0"
+              file="Source/MarketplaceInterface.h"/>
+        <FILE id="KMfN5M" name="RestAPIHandler.cpp" compile="1" resource="0"
+              file="Source/RestAPIHandler.cpp"/>
+        <FILE id="tduBRj" name="RestAPIHandler.h" compile="0" resource="0"
+              file="Source/RestAPIHandler.h"/>
         <FILE id="so3I2I" name="UserData.cpp" compile="1" resource="0" file="Source/UserData.cpp"/>
         <FILE id="Ikp9PT" name="UserData.h" compile="0" resource="0" file="Source/UserData.h"/>
+        <FILE id="SFJiLX" name="UserSessionManager.cpp" compile="1" resource="0"
+              file="Source/UserSessionManager.cpp"/>
+        <FILE id="QwIoSo" name="UserSessionManager.h" compile="0" resource="0"
+              file="Source/UserSessionManager.h"/>
       </GROUP>
       <GROUP id="{37CAC29E-88E6-DD01-B2F8-3A6590B52EBF}" name="Core">
         <GROUP id="{64960AC0-DF34-E9B2-9A54-DDD55378AFF5}" name="Utils">

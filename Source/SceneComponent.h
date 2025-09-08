@@ -19,9 +19,14 @@ class SceneComponent : public juce::Component, public RunnerInput
 {
 public:
     SceneComponent(class WaviateFlow2025AudioProcessor& processor, const juce::String& name);
+    SceneComponent(class WaviateFlow2025AudioProcessor& processor, const uint64_t fullId);
     ~SceneComponent();
 
-    
+    void constructWithName(const juce::String& name);
+    juce::String getNameFromJson(const juce::String& json);
+    juce::String getJsonFromFullID(const uint64_t fullId);
+    void initSceneWithJson(const juce::String& json);
+
 
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;

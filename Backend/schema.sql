@@ -30,7 +30,6 @@ CREATE TABLE users (
     id INT8 PRIMARY KEY,
     username STRING UNIQUE NOT NULL,
     email STRING UNIQUE NOT NULL,
-    password_hash STRING,                        -- nullable for OAuth users
     provider_type INT2 NOT NULL DEFAULT 0,       -- 0: basic, 1: Google, 2: Apple, etc.
     profile JSONB,
     role STRING NOT NULL DEFAULT 'user',         -- 'user','admin','moderator'
@@ -38,7 +37,7 @@ CREATE TABLE users (
     last_login_at TIMESTAMPTZ,                   -- track last login
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CHECK (id >= 2 AND id <= 281474976710655)    -- 2 .. (2^48 - 1)
+    CHECK (id >= 16 AND id <= 281474976710655)    -- 16 .. (2^48 - 1)
 );
 
 -- Case-insensitive uniqueness helper for email (optional but recommended)

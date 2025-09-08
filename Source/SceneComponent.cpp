@@ -4,23 +4,19 @@
 #include "DrawingUtils.h"
 
 SceneComponent::SceneComponent(WaviateFlow2025AudioProcessor& processor, const juce::String& name)
-    : processorRef(processor)
+    : processorRef(processor), customNodeType(processorRef.getCurrentLoadedTypeIndex())
 {
-    setName(name);
-    nodes.reserve(2000);
-	addAndMakeVisible(deleteSceneButton);
-    deleteSceneButton.onClick = [this]() {
-        processorRef.deleteScene(this);
-        };
-	if (!processorRef.scenes.empty()) {
-		sceneNameBox.setJustification(juce::Justification::centred);
-        addAndMakeVisible(sceneNameBox);
-        sceneNameBox.setText(name);
-        
-	}
-    highlightedNode = nullptr;
-    setSize(8192, 8192);
-    setWantsKeyboardFocus(true);
+    customNodeType.setNodeId(processorRef.getCurrentLoadedUserIndex(), customNodeType.getNodeId());
+    constructWithName(name);
+}
+
+SceneComponent::SceneComponent(WaviateFlow2025AudioProcessor& processor, const uint64_t fullId) : processorRef(processor), customNodeType(processorRef.getCurrentLoadedTypeIndex())
+{
+    customNodeType.setNodeId(processorRef.getCurrentLoadedUserIndex(), customNodeType.getNodeId());
+    juce::String json = getJsonFromFullID(fullId);
+    juce::String name = getNameFromJson(json);
+    initSceneWithJson(json);
+    constructWithName(name);
 }
 
 struct MenuNode
@@ -37,6 +33,39 @@ SceneComponent::~SceneComponent()
 	nodes.clear();
 	highlightedNode = nullptr;
 	drawReady = false;
+}
+
+void SceneComponent::constructWithName(const juce::String& name)
+{
+    setName(name);
+    nodes.reserve(2000);
+    addAndMakeVisible(deleteSceneButton);
+    deleteSceneButton.onClick = [this]() {
+        processorRef.deleteScene(this);
+        };
+    if (!processorRef.scenes.empty()) {
+        sceneNameBox.setJustification(juce::Justification::centred);
+        addAndMakeVisible(sceneNameBox);
+        sceneNameBox.setText(name);
+
+    }
+    highlightedNode = nullptr;
+    setSize(8192, 8192);
+    setWantsKeyboardFocus(true);
+}
+
+juce::String SceneComponent::getNameFromJson(const juce::String& json)
+{
+    return juce::String();
+}
+
+juce::String SceneComponent::getJsonFromFullID(const uint64_t fullId)
+{
+    return juce::String();
+}
+
+void SceneComponent::initSceneWithJson(const juce::String& json)
+{
 }
 
 void SceneComponent::mouseDown(const juce::MouseEvent& e)
@@ -442,6 +471,7 @@ bool SceneComponent::canPlaceType(const NodeType& type)
 
 void SceneComponent::editNodeType()
 {
+
     customNodeType.name = getName();
     customNodeType.address = "custom/";
     customNodeType.buildUI = [](NodeComponent&, NodeData&) {};

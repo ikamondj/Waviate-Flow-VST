@@ -51,6 +51,12 @@ struct NodeType {
     uint64_t getNodeUserID() const;
     uint16_t getNodeId() const;
     uint64_t getNodeFullID() const;
+    static const NodeType* getTypeByNodeID(uint64_t fullId);
+    static void putIdLookup(const NodeType& t);
     void setNodeId(uint64_t userId, uint16_t nodeId);
+    bool ownsScene = false;
+    NodeType(uint16_t nodeId);
+    NodeType(uint64_t fullId, class WaviateFlow2025AudioProcessor&);
+    ~NodeType();
 };
 

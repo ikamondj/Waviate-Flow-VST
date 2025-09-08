@@ -91,10 +91,18 @@ public:
     juce::AbstractFifo fifo{ bufferSize };
     class SceneComponent* getAudibleScene();
     std::optional<UserData> currentLogin;
+    uint16_t getCurrentLoadedTypeIndex();
+    uint64_t getCurrentLoadedUserIndex();
+    
+
 private:
+    uint16_t currentLoadedTypeIndex = 0;
+    uint64_t currentLoadedUserIndex = 1;
     class SceneComponent* audibleScene;
     std::atomic<int> currentRunner = { 0 };
     std::atomic<long long> totalSamplesProcessed, lastSwapSample;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WaviateFlow2025AudioProcessor)
 };
+
+

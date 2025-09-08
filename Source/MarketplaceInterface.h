@@ -1,8 +1,8 @@
 /*
   ==============================================================================
 
-    Serializer.h
-    Created: 31 Aug 2025 9:42:01pm
+    MarketplaceInterface.h
+    Created: 7 Sep 2025 11:46:07am
     Author:  ikamo
 
   ==============================================================================
@@ -10,8 +10,6 @@
 
 #pragma once
 #include <JuceHeader.h>
-#include <nlohmann/json.hpp>
-class Serializer {
-public:
-    static std::optional<juce::String> serializeToFile(class NodeType& type);
+class MarketplaceInterface {
+
 };

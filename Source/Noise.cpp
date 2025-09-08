@@ -15,6 +15,10 @@
 #include <cmath>
 #include <bit>
 #include <cstdint>
+#include <noise/noise.h>
+noise::module::Voronoi voronoi;
+noise::module::Perlin perlin;
+noise::module::RidgedMulti ridgedMulti;
 inline std::mt19937_64& rng() {
     thread_local std::mt19937_64 eng([] {
         std::random_device rd;
@@ -74,4 +78,25 @@ double coin_flip() {
     static thread_local std::mt19937 gen(std::random_device{}());
     static thread_local std::bernoulli_distribution dist(0.5);
     return dist(gen) ? 1.0 : 0.0;
+}
+
+double valueNoise(double x) {
+    return noise::ValueCoherentNoise3D(x, 0, 0, 0, noise::NoiseQuality::QUALITY_STD);
+}
+
+double voronoiNoise(double x) {
+    return voronoi.GetValue(x, 0, 0);
+}
+
+double perlinNoise(double x, int octaveCount, double lacunarity, double roughness) {
+    perlin.SetOctaveCount(octaveCount);
+    perlin.SetLacunarity(lacunarity);
+    perlin.SetPersistence(roughness);
+    return perlin.GetValue(x,0,0);
+}
+
+double ridgedMultiNoise(double x, int octaveCount, double lacunarity) {
+    ridgedMulti.SetOctaveCount(octaveCount);
+    ridgedMulti.SetLacunarity(lacunarity);
+    return ridgedMulti.GetValue(x, 0, 0);
 }
