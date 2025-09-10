@@ -24,6 +24,8 @@
               file="Source/UserSessionManager.h"/>
       </GROUP>
       <GROUP id="{37CAC29E-88E6-DD01-B2F8-3A6590B52EBF}" name="Core">
+        <FILE id="WRcyQK" name="InputType.h" compile="0" resource="0" file="Source/InputType.h"/>
+        <FILE id="lzPMN3" name="ddtype.h" compile="0" resource="0" file="Source/ddtype.h"/>
         <GROUP id="{64960AC0-DF34-E9B2-9A54-DDD55378AFF5}" name="Utils">
           <FILE id="j1LlI4" name="Noise.cpp" compile="1" resource="0" file="Source/Noise.cpp"/>
           <FILE id="QI1Wwu" name="Noise.h" compile="0" resource="0" file="Source/Noise.h"/>
@@ -57,8 +59,6 @@
         <FILE id="trtlD0" name="NodeComponent.cpp" compile="1" resource="0"
               file="Source/NodeComponent.cpp"/>
         <FILE id="mFuHFJ" name="NodeComponent.h" compile="0" resource="0" file="Source/NodeComponent.h"/>
-        <FILE id="sgAcBY" name="Pin.cpp" compile="1" resource="0" file="Source/Pin.cpp"/>
-        <FILE id="HaM5yM" name="Pin.h" compile="0" resource="0" file="Source/Pin.h"/>
         <FILE id="TRYB07" name="SceneComponent.cpp" compile="1" resource="0"
               file="Source/SceneComponent.cpp"/>
         <FILE id="Gnqabq" name="SceneComponent.h" compile="0" resource="0"

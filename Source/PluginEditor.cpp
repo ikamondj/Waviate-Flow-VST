@@ -62,7 +62,6 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
         }
         audioProcessor.scenes[row]->setName(name);
         audioProcessor.scenes[row]->customNodeType.name = name;
-        audioProcessor.updateRegistryFull();
     };
 
     addButton.onClick = [&]() {
@@ -217,6 +216,7 @@ void WaviateFlow2025AudioProcessorEditor::deselectBrowserItem()
 
 void WaviateFlow2025AudioProcessorEditor::timerCallback()
 {
+    return;
     constexpr int tempSize = 256;
     float temp[tempSize];
     auto* scene = audioProcessor.getAudibleScene();

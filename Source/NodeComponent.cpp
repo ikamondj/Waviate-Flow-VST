@@ -1,7 +1,7 @@
 #include "NodeComponent.h"
 #include "PluginEditor.h"
 #include "NodeType.h"
-#include "Pin.h"
+#include "DrawingUtils.h"
 
 
 NodeComponent::NodeComponent(NodeData nodeData, const NodeType& nodeType, SceneComponent& scene)
@@ -63,14 +63,15 @@ void NodeComponent::paint(juce::Graphics& g)
     // helpers for colors
     auto inputOutlineColour = [&](int idx) -> juce::Colour {
         const auto& f = t.inputs[(size_t)idx];
-        return f.requiresCompileTimeKnowledge || getNodeDataConst().needsCompileTimeInputs() ? juce::Colours::darkred : juce::Colours::black;
+        return f.requiresCompileTimeKnowledge || getNodeDataConst().needsCompileTimeInputs() ? juce::Colours::mediumvioletred.darker() : juce::Colours::black;
         };
     auto outputOutlineColour = [&]() -> juce::Colour {
-        return getNodeData().isCompileTimeKnown() ? juce::Colours::black : juce::Colours::darkred;
+        return getNodeData().isCompileTimeKnown() ? juce::Colours::black : juce::Colours::mediumvioletred.darker();
         };
     auto inputFillColour = [&](int idx) -> juce::Colour {
         const auto& f = t.inputs[(size_t)idx];
-        return (f.requiredSize == 1) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold;
+        auto inp = getNodeDataConst().getInput(idx);
+        return (f.requiredSize == 1 || (inp && inp->compileTimeSizeReady(getOwningScene()) && inp->getCompileTimeSize(getOwningScene()) == 1)) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold;
         };
     auto outputFillColour = [&]() -> juce::Colour {
         if (getNodeData().compileTimeSizeReady(getOwningScene())) {
@@ -83,8 +84,11 @@ void NodeComponent::paint(juce::Graphics& g)
 
     // draw input pins + labels
     g.setFont(10.0f * (float)scale);
+    auto trueType = getNodeDataConst().getTrueType();
     for (int i = 0; i < (int)t.inputs.size(); ++i) {
         const auto& in = t.inputs[(size_t)i];
+        
+        InputType inputType = in.inputType;
         const float yCenter = topOffset + i * pinSpacing + pinRadius;
 
         const float cx = rect.getX() - sides * 0.5f;               // left gutter center
@@ -94,12 +98,35 @@ void NodeComponent::paint(juce::Graphics& g)
         juce::Rectangle<float> inner = pinBounds.reduced(4.0f * (float)scale);
 
         g.setColour(inputOutlineColour(i));
-        if (in.isBoolean) g.fillRect(pinBounds);
-        else              g.fillEllipse(pinBounds);
+        if (inputType == InputType::any) {
+			auto inputNode = getNodeDataConst().getInput((size_t)i);
+            if (inputNode && inputNode->getType()->outputType != InputType::followsInput) {
+				inputType = inputNode->getType()->outputType;
+            }
+            else if (getType().outputType == InputType::followsInput) {
+                if (!getNodeDataConst().outputs.empty()) {
+                    for (auto& [c,indx] : getNodeDataConst().outputs) {
+                        auto dit = c->getType()->inputs[indx].inputType;
+                        if (dit != InputType::any) {
+                            inputType = dit;
+                        }
+                    }
+                }
+            }
+        }
+        g.setColour(inputOutlineColour(i));
+        g.fillEllipse(pinBounds);
+
 
         g.setColour(inputFillColour(i));
-        if (in.isBoolean) g.fillRect(inner);
-        else              g.fillEllipse(inner);
+        auto renderedType = inputType == InputType::any && trueType != InputType::dirty ? trueType : inputType;
+        switch (renderedType) {
+        case InputType::boolean: g.fillRect(inner); break;
+        case InputType::decimal: g.fillEllipse(inner); break;
+        case InputType::integer: fillHexagon(g, inner); break;
+		case InputType::any: 
+		case InputType::followsInput: fillStar(g, pinBounds); break;
+        }
 
         const int textX = (int)(rect.getX() - (sides - pinDiameter) * 0.5f + pinDiameter + 2.0f);
         const int textY = (int)(yCenter - 7.0f);
@@ -109,7 +136,7 @@ void NodeComponent::paint(juce::Graphics& g)
 
     // draw single output pin (right side)
     if (getType().name != "output") {
-        const bool isBoolOut = getType().isBoolean;
+        InputType inputType = getType().outputType;
         const float yCenter = topOffset + pinRadius;               // match your old output placement
         const float cx = rect.getRight() + sides * 0.5f;           // right gutter center
         const float cy = yCenter;
@@ -118,12 +145,42 @@ void NodeComponent::paint(juce::Graphics& g)
         juce::Rectangle<float> inner = pinBounds.reduced(4.0f * (float)scale);
 
         g.setColour(outputOutlineColour());
-        if (isBoolOut) g.fillRect(pinBounds);
-        else           g.fillEllipse(pinBounds);
+        if (inputType == InputType::followsInput) {
+            if (!getNodeDataConst().outputs.empty()) {
+                for (auto& [c, indx] : getNodeDataConst().outputs) {
+                    auto dit = c->getType()->inputs[indx].inputType;
+                    if (dit != InputType::any) {
+                        inputType = dit;
+                    }
+                }
+            }
+            else {
+                const auto& input = getType().inputs[getType().whichInputToFollowWildcard];
+                if (input.inputType == InputType::any) {
+                    auto inputNode = getNodeDataConst().getInput((size_t)getType().whichInputToFollowWildcard);
+                    if (inputNode && inputNode->getType()->outputType != InputType::followsInput) {
+                        inputType = inputNode->getType()->outputType;
+                    }
+                    else {
+                        inputType = InputType::any;
+                    }
+                }
+            }
+            
+        }
+        g.fillEllipse(pinBounds);
 
         g.setColour(outputFillColour());
-        if (isBoolOut) g.fillRect(inner);
-        else           g.fillEllipse(inner);
+        auto renderedType = inputType == InputType::followsInput && trueType != InputType::dirty ? trueType : inputType;
+        switch (inputType) {
+        case InputType::boolean: g.fillRect(inner); break;
+        case InputType::decimal: g.fillEllipse(inner); break;
+        case InputType::integer: fillHexagon(g, pinBounds); break;
+        case InputType::followsInput:
+		case InputType::any: 
+            fillStar(g, pinBounds); 
+            break;
+        }
     }
 }
 
@@ -165,6 +222,7 @@ bool NodeComponent::isOverOutputPin(juce::Point<int> p) const
     return dx * dx + dy * dy <= r * r;
 }
 
+
 double NodeComponent::colorHash(juce::String s)
 {
     double d = 0;
@@ -174,6 +232,17 @@ double NodeComponent::colorHash(juce::String s)
     return d;
 }
 
+juce::String ddtypeToString(ddtype d, InputType type) {
+	if (type == InputType::decimal) {
+		return juce::String(d.d);
+	}
+	else if (type == InputType::boolean) {
+		return d.i == 0 ? "false" : "true";
+	}
+	else { // integer
+		return juce::String(d.i);
+	}
+}
 
 void NodeComponent::mouseDown(const juce::MouseEvent& e)
 {
@@ -198,11 +267,10 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                 int size = getNodeDataConst().getCompileTimeSize(scene);
                 tooltip.addItem(juce::String("output size: ") + juce::String(size), false, false, []() {});
                 if (getNodeDataConst().isCompileTimeKnown()) {
-                    auto& runner = getProcessorRef().getBuildableRunner();
-                    auto field = getNodeDataConst().getCompileTimeValue(&runner);
+                    auto field = getNodeDataConst().getCompileTimeValue(getOwningScene());
                     juce::String result = "value: { ";
                     for (int i = 0; i < (int)field.size(); ++i) {
-                        result += juce::String(field[i]);
+                        result += ddtypeToString(field[i], getType().outputType);
                         result += juce::String(", ");
                     }
                     result += juce::String("}");
@@ -220,18 +288,18 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                     tooltip.addItem(juce::String("required size: ") + juce::String(require), false, false, []() {});
                 }
                 if (!inputNode) {
-                    double value = getNodeDataConst().getType()->inputs[overInput].defaultValue;
-                    tooltip.addItem(juce::String("value: ") + juce::String(value), false, false, []() {});
+                    const auto& inp = getNodeDataConst().getType()->inputs[overInput];
+                    ddtype value = inp.defaultValue;
+					juce::String v = inp.inputType == InputType::decimal ? juce::String(value.d)
+						: inp.inputType == InputType::boolean ? (value.i == 0 ? juce::String("false") : juce::String("true"))
+						: juce::String(value.i);
+                    tooltip.addItem(juce::String("value: ") + v, false, false, []() {});
                 }
                 else if (inputNode->isCompileTimeKnown()) {
-                    auto& imp = getProcessorRef(); // RunnerInput alias per your code
-                    // Note: your original code had a condition that looked inverted;
-                    // here we keep the same structure.
-                    auto& runner = imp.getBuildableRunner();
-                    auto field = inputNode->getCompileTimeValue(&runner);
+                    auto field = inputNode->getCompileTimeValue(getOwningScene());
                     juce::String result = "value: { ";
                     for (int i = 0; i < (int)field.size(); ++i) {
-                        result += juce::String(field[i]);
+                        result += ddtypeToString(field[i], inputNode->getType()->outputType);
                         result += juce::String(", ");
                     }
                     result += juce::String("}");

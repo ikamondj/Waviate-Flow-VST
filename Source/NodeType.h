@@ -5,6 +5,9 @@
 #include <JuceHeader.h>
 #include <span>
 #include "NodeData.h"
+#include "InputType.h"
+#include "ddtype.h"
+
 
 struct InputFeatures {
     /// <summary>
@@ -14,12 +17,14 @@ struct InputFeatures {
     /// <param name="isBool">Whether the input is a boolean type.</param>
     /// <param name="requiredSize">Whether the input requires specific size vector input.</param>
     /// <param name="reqCompileTime">Whether the input requires compile-time knowledge.</param>
-	InputFeatures(const juce::String& n, bool isBool, int requiredSize, bool reqCompileTime);
+	InputFeatures(const juce::String& n, InputType, int requiredSize, bool reqCompileTime);
     juce::String name;
-    bool isBoolean;
+    InputType inputType = InputType::decimal;
+    bool isBoolean();
+    bool isInt();
     int requiredSize;
     bool requiresCompileTimeKnowledge;
-    double defaultValue = 0.0;
+    ddtype defaultValue = 0.0;
     NodeComponent* optionalInputComponent;
 };
 
@@ -37,13 +42,13 @@ struct NodeType {
     juce::String address;
     juce::String tooltip;
     std::vector<InputFeatures> inputs;
-    using ExecuteFn = void(*)(const NodeData& node, class UserInput& userInput, const std::vector<std::span<double>>& inputs, std::span<double>& output, class RunnerInput& inlineInstance);
+    using ExecuteFn = void(*)(const NodeData& node, class UserInput& userInput, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const class RunnerInput& inlineInstance);
     ExecuteFn execute;
     std::function<void(class NodeComponent&, NodeData&)> buildUI;
-    std::function<int(const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<double>>& inputs, class RunnerInput& inlineInstance, int inputNum, const NodeData& self)> getOutputSize;
+    std::function<int(const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<ddtype>>& inputs, const class RunnerInput& inlineInstance, int inputNum, const NodeData& self)> getOutputSize;
     std::function<void(NodeComponent&)> onResized = [](NodeComponent&) {};
-    bool isSingleton(const NodeData* node, const std::vector<std::span<double>>& inputs) const;
-    bool isBoolean = false;
+    bool isSingleton(const NodeData* node, const std::vector<std::span<ddtype>>& inputs) const;
+    InputType outputType = InputType::decimal;
     bool alwaysOutputsRuntimeData = false;
     class SceneComponent* fromScene = nullptr;
     bool isInputNode = false;
@@ -57,6 +62,8 @@ struct NodeType {
     bool ownsScene = false;
     NodeType(uint16_t nodeId);
     NodeType(uint64_t fullId, class WaviateFlow2025AudioProcessor&);
+    int whichInputToFollowWildcard = -1;
+	static NodeType& getConversionType(InputType from, InputType to);
     ~NodeType();
 };
 

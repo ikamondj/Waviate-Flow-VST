@@ -9,3 +9,16 @@
 */
 
 #include "Serializer.h"
+#include "NodeType.h"
+
+std::optional<nlohmann::json> Serializer::serializeToJson(NodeType& type)
+{
+    nlohmann::json j;
+    if (!type.fromScene) {
+        return {};
+    }
+    j["id"] = type.getNodeFullID();
+	j["name"] = type.name.toStdString();
+	j["address"] = type.address.toStdString();
+    return j;
+}

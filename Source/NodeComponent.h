@@ -32,6 +32,8 @@ public:
     int getInputPinIndexAtPoint(juce::Point<int> p) const;
     bool isOverOutputPin(juce::Point<int> p) const;
     
+	
+    
     bool isPinDragFromOutput() const { return pinDragFromOutput; }
     int  getPinDragInputIndex() const { return pinDragInputIndex; } // -1 if from output
     juce::Point<float> getPinDragStartScenePos() const { return pinDragStartScenePos; }
@@ -44,7 +46,7 @@ private:
     int  pinDragInputIndex = -1;        // valid only when pinDragFromOutput == false
     juce::Point<float> pinDragStartScenePos;
     juce::Point<float> pinDragCurrentScenePos;
-
+    
     NodeData node;
     
     const NodeType& type;

@@ -32,13 +32,15 @@ WaviateFlow2025AudioProcessor::WaviateFlow2025AudioProcessor()
     // Always create the "main" scene
     registry.reserve(65536);
     initializeRegistry();
-    updateRegistryFull();
     audibleScene = nullptr;
     scenes.reserve(1048576);
     if (scenes.empty()) {
         addScene("main");
         audibleScene = activeScene = scenes[0].get();
     }
+	runners.push_back(std::make_unique<RunnerInput>());
+    runners.push_back(std::make_unique<RunnerInput>());
+    runners.push_back(std::make_unique<RunnerInput>());
     activeInstance = this;
 }
 
@@ -185,11 +187,23 @@ void WaviateFlow2025AudioProcessor::processBlock (juce::AudioBuffer<float>& buff
             outR = mainOut.getWritePointer(1);
         }
 
-        const int64_t lastSwap = lastSwapSample.load(std::memory_order_acquire);
-        const int64_t base = totalSamplesProcessed.load(std::memory_order_relaxed);
-        RunnerInput& runner = getCurrentRunner();
-		userInput.runner = &runner;
-        RunnerInput& prevRunner = getPreviousRunner();
+        const int64_t lastSwap = 0; //TODO fix!
+        const int64_t base = 50000; //TODO fix!
+        const RunnerInput* runner = nullptr;
+        const RunnerInput* prevRunner = nullptr;
+        userInput.runner = nullptr;
+        {
+            std::unique_lock<std::mutex> lock(mutex, std::try_to_lock);
+
+            if (lock.owns_lock()) {
+                runner = getCurrentRunner();
+                userInput.runner = runner;
+                prevRunner = getPreviousRunner();
+            }
+        }
+        
+
+        
         const int fadeWindowSamples = int(fadeWindowSeconds * sampleRate);
 
         for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
@@ -222,35 +236,36 @@ void WaviateFlow2025AudioProcessor::processBlock (juce::AudioBuffer<float>& buff
             if (audibleScene) {
                 
                 auto ndata = audibleScene->nodes[0]->getNodeData();
-                std::span<double> l = Runner::run(runner, userInput, std::vector<std::span<double>>());
-                for (double d : l) {
-                    outL[sample] += d * alpha;
+                std::span<ddtype> l = Runner::run(runner, userInput, std::vector<std::span<ddtype>>());
+                for (ddtype d : l) {
+                    outL[sample] += d.d * alpha;
                 }
                 
                 userInput.isStereoRight = 1.0;
-                std::span<double> r = Runner::run(runner, userInput, std::vector<std::span<double>>());
-                for (double d : r) {
-                    outR[sample] += d * alpha;
+                std::span<ddtype> r = Runner::run(runner, userInput, std::vector<std::span<ddtype>>());
+                for (ddtype d : r) {
+                    outR[sample] += d.d * alpha;
                 }
                 
                 
                 const double beta = 1 - alpha;
                 if (beta > 0.0) {
                     userInput.isStereoRight = 0.0;
-                    std::span<double> l = Runner::run(prevRunner, userInput, std::vector<std::span<double>>());
-                    for (double d : l) {
-                        outL[sample] += d * beta;
+                    std::span<ddtype> l = Runner::run(prevRunner, userInput, std::vector<std::span<ddtype>>());
+                    for (ddtype d : l) {
+                        outL[sample] += d.d * beta;
                     }
 
                     userInput.isStereoRight = 1.0;
-                    std::span<double> r = Runner::run(prevRunner, userInput, std::vector<std::span<double>>());
-                    for (double d : r) {
-                        outR[sample] += d * beta;
+                    std::span<ddtype> r = Runner::run(prevRunner, userInput, std::vector<std::span<ddtype>>());
+                    for (ddtype d : r) {
+                        outR[sample] += d.d * beta;
                     }
                 }
 
                 userInput.rightInputHistory.add(outR[sample] = 10.0 * std::tanh(outR[sample] * 0.1));
                 userInput.leftInputHistory.add(outL[sample] = 10.0 * std::tanh(outL[sample] * 0.1));
+				dynamic_cast<juce::AudioVisualiserComponent*>(audibleScene->nodes[0]->inputGUIElements[0].get())->pushSample(&outL[sample], 1);
             }
         }
     }
@@ -261,7 +276,7 @@ void WaviateFlow2025AudioProcessor::processBlock (juce::AudioBuffer<float>& buff
     if (size2 > 0) memcpy(ring.data() + start2, buffer.getReadPointer(0) + size1, size2 * sizeof(float));
     fifo.finishedWrite(size1 + size2);
 
-    totalSamplesProcessed.fetch_add(buffer.getNumSamples(), std::memory_order_relaxed);
+    //totalSamplesProcessed.fetch_add(buffer.getNumSamples(), std::memory_order_relaxed);
     userInput.numFramesStartOfBlock += buffer.getNumSamples();
 
 }
@@ -316,15 +331,9 @@ void WaviateFlow2025AudioProcessor::handleMidi(const juce::MidiMessage& message,
 void WaviateFlow2025AudioProcessor::initializeRunner()
 {
     if (scenes.empty()) return;
-    currentRunner.store((currentRunner.load(std::memory_order_relaxed) + 1) % 3);
 
-    Runner::initializeTop(*this, audibleScene,
-        std::vector<std::span<double>>());
+    swapToNextRunner();
 
-
-    // (Optional) reset a fade timer here so processBlock can crossfade
-    lastSwapSample.store(totalSamplesProcessed.load(std::memory_order_relaxed),
-        std::memory_order_relaxed);
 }
 
 //==============================================================================
@@ -368,7 +377,6 @@ void WaviateFlow2025AudioProcessor::addScene(const juce::String& name)
     if (editor) {
         editor->browser.updateContent();
     }
-    updateRegistryFull();
 }
 
 void WaviateFlow2025AudioProcessor::deleteScene(SceneComponent* scene)
@@ -383,7 +391,6 @@ void WaviateFlow2025AudioProcessor::deleteScene(SceneComponent* scene)
         if (getCurrentEditor()) {
             getCurrentEditor()->browser.updateContent();
         }
-        updateRegistryFull();
         
     }
 }
@@ -403,13 +410,6 @@ const std::vector<NodeType>& WaviateFlow2025AudioProcessor::getRegistry() const
 }
 
 
-void WaviateFlow2025AudioProcessor::updateRegistryFull()
-{
-    for (auto& scene : getScenes()) {
-        scene->buildNodeTypeMenuCache();
-    }
-
-}
 
 void WaviateFlow2025AudioProcessor::setAudibleScene(SceneComponent* scene)
 {
@@ -434,27 +434,23 @@ WaviateFlow2025AudioProcessor* WaviateFlow2025AudioProcessor::GetActiveInstance(
     return activeInstance;
 }
 
-RunnerInput& WaviateFlow2025AudioProcessor::getCurrentRunner() noexcept {
-    return bufferedRunners[currentRunner.load(std::memory_order_acquire) % 3];
+const RunnerInput* WaviateFlow2025AudioProcessor::getCurrentRunner() noexcept {
+    return runners.at(runners.size() - 1).get();
 }
 
-RunnerInput& WaviateFlow2025AudioProcessor::getPreviousRunner() noexcept
+const RunnerInput* WaviateFlow2025AudioProcessor::getPreviousRunner() noexcept
 {
-    return bufferedRunners[(currentRunner.load(std::memory_order_acquire) + 2) % 3];
+	return runners.at(runners.size() - 2).get();
 }
 
-RunnerInput& WaviateFlow2025AudioProcessor::getBuildableRunner() noexcept
-{
-    return bufferedRunners[(currentRunner.load(std::memory_order_acquire) + 1) % 3];
-}
 
 void WaviateFlow2025AudioProcessor::swapToNextRunner()
 {
-    int cur = currentRunner.load(std::memory_order_relaxed);
-    int next = (cur + 1) % 3;  // advance by one
-    currentRunner.store(next, std::memory_order_release);
-
-    lastSwapSample.store(totalSamplesProcessed, std::memory_order_relaxed);
+    std::scoped_lock(mutex);
+    std::unique_ptr<RunnerInput> nextRunner = std::make_unique <RunnerInput>();
+    Runner::initialize(*nextRunner, audibleScene, std::vector<std::span<ddtype>>());
+	runners.push_back(std::move(nextRunner));
+    runners.pop_front();
 }
 
 SceneComponent* WaviateFlow2025AudioProcessor::getAudibleScene() { return audibleScene; }

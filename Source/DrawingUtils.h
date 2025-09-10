@@ -34,3 +34,8 @@ juce::Point<float> cubicBezierPoint(const juce::Point<float>& p0,
     const juce::Point<float>& p2,
     const juce::Point<float>& p3,
     float t);
+
+
+void fillHexagon(juce::Graphics& g, const juce::Rectangle<float>& bounds);
+
+void fillStar(juce::Graphics& g, const juce::Rectangle<float>& bounds);

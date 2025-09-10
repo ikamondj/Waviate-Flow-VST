@@ -83,3 +83,55 @@ juce::Point<float> cubicBezierPoint(const juce::Point<float>& p0, const juce::Po
 
     return p;
 }
+
+void fillHexagon(juce::Graphics& g, const juce::Rectangle<float>& bounds)
+{
+    juce::Path hex;
+    auto centre = bounds.getCentre();
+    float radius = 0.5f * std::min(bounds.getWidth(), bounds.getHeight());
+
+    hex.startNewSubPath(centre.getX() + radius, centre.getY());
+
+    for (int k = 1; k < 6; ++k)
+    {
+        float angle = juce::MathConstants<float>::twoPi * (float)k / 6.0f;
+        hex.lineTo(centre.getX() + radius * std::cos(angle),
+            centre.getY() + radius * std::sin(angle));
+    }
+
+    hex.closeSubPath();
+    g.fillPath(hex);
+}
+
+void fillStar(juce::Graphics& g, const juce::Rectangle<float>& bounds)
+{
+    juce::Path star;
+    const auto centre = bounds.getCentre();
+    const float outerR = 0.5f * std::min(bounds.getWidth(), bounds.getHeight());
+    const float innerR = outerR * 0.381966011f;
+
+    constexpr int  points = 5;
+    const float    step = juce::MathConstants<float>::twoPi / points;
+    const float    rotation = -juce::MathConstants<float>::halfPi; // tip up
+
+    // First outer point
+    float angleOuter = rotation;
+    star.startNewSubPath(centre.x + outerR * std::cos(angleOuter),
+        centre.y + outerR * std::sin(angleOuter));
+
+
+    for (int i = 0; i < points; ++i)
+    {
+        float angleInner = rotation + i * step + step * 0.5f;
+        star.lineTo(centre.x + innerR * std::cos(angleInner),
+            centre.y + innerR * std::sin(angleInner));
+
+        float angleNextOuter = rotation + (i + 1) * step;
+        star.lineTo(centre.x + outerR * std::cos(angleNextOuter),
+            centre.y + outerR * std::sin(angleNextOuter));
+    }
+
+    star.closeSubPath();
+    g.fillPath(star);
+}
+

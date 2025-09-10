@@ -12,7 +12,11 @@
 #include <string>
 #include <span>
 #include <JuceHeader.h>
+#include "InputType.h"
+#include "ddtype.h"
 #pragma once
+
+
 
 class NodeData
 {
@@ -27,7 +31,7 @@ public:
 	const juce::String getStringProperty(const juce::String& key) const noexcept;
 	const double getNumericProperty(const juce::String& key) const noexcept;
 
-    const std::vector<double> getCompileTimeValue(class RunnerInput* inlineInstance) const noexcept;
+    const std::vector<ddtype> getCompileTimeValue(class RunnerInput* inlineInstance) const noexcept;
     const std::map<juce::String, double>& getNumericProperties() const noexcept;
     void setProperty(const juce::String& key, const juce::String& value);
     bool needsCompileTimeInputs() const;
@@ -49,18 +53,22 @@ public:
 
     const int getNumInputs() const noexcept;
 
-    const int getMaxOutputDimension(const std::vector<std::vector<double>>&, class RunnerInput& context, int inputNum) const noexcept;
+    const int getMaxOutputDimension(const std::vector<std::vector<ddtype>>&, class RunnerInput& context, int inputNum) const noexcept;
 
     class NodeComponent* owningComponent = nullptr;
-    bool compileTimeSizeReady(class RunnerInput* inlineInstance) const;
-    int getCompileTimeSize(RunnerInput* inlineInstance) const;
-    void setCompileTimeSize(RunnerInput* inlineInstance, int s);
-    void markUncompiled(RunnerInput* inlineInstance);
+    bool compileTimeSizeReady(const class RunnerInput* inlineInstance) const;
+    int getCompileTimeSize(const RunnerInput* inlineInstance) const;
+    void setCompileTimeSize(const RunnerInput* inlineInstance, int s);
+    void markUncompiled(const RunnerInput* inlineInstance);
     std::vector<NodeData*> inputNodes;
-    NodeData* output = nullptr;
+    std::set<std::tuple<NodeData*, int>> outputs;
+    enum class InputType getTrueType() const;
+    void markWildCardTypesDirty();
+    bool computeWildCardTypes(bool exceedsGraphDepth, std::unordered_set<NodeData*>& visited);
+	void setTrueType(InputType t);
     int inputIndex = -1;
 private:
-	
+    InputType trueType;
     
     std::map<juce::String, juce::String> properties;
 	std::map<juce::String, double> numericProperties;
@@ -68,7 +76,7 @@ private:
     const NodeType& type;
    
     std::optional<int> compileTimeSize;
-    std::unordered_map<class RunnerInput*, int> compileTimeSizes;
+    std::unordered_map<const class RunnerInput*, int> compileTimeSizes;
 
     bool wouldIntroduceCycle(NodeData* candidate) const;
 

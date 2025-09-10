@@ -8,7 +8,9 @@
   ==============================================================================
 */
 #include <array>
+#include <unordered_map>
 #include "CircleBuffer.h"
+#include <JuceHeader.h>
 #pragma once
 class UserInput
 {
@@ -22,17 +24,18 @@ public:
     std::array<double, 128> noteCycle;
     double pitchWheelValue;
     double modWheelValue;
-    long numFramesStartOfBlock;
-    double sampleInBlock;
+    int64_t numFramesStartOfBlock;
+    int64_t sampleInBlock;
     double sampleRate;
     double leftInput;
     double rightInput;
     double sideChainL;
     double sideChainR;
-    double isStereoRight;
+    bool isStereoRight;
 	CircleBuffer leftInputHistory;
     CircleBuffer rightInputHistory;
     double getHistoricalSample(int samplesAgo) const;
-    std::array<double, 1024> storeableValues;
-    class RunnerInput* runner = nullptr;
+    std::unordered_map<juce::String, double> namedValues;
+    std::unordered_map<int, double> storeableValues;
+    const class RunnerInput* runner = nullptr;
 };

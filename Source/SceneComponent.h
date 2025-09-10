@@ -54,10 +54,11 @@ public:
     void editNodeType();
     
 
-	void addNode(const NodeType& type, juce::Point<int> localPos);
-    void addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index);
+	NodeComponent& addNode(const NodeType& type, juce::Point<int> localPos);
+    NodeComponent& addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index);
 	void deleteNode(NodeComponent* node);
     void ensureNodeConnectionsCorrect(RunnerInput*);
+    void computeAllNodeWildCards();
     juce::TextButton deleteSceneButton{ "x" };
     juce::TextEditor sceneNameBox;
     void onSceneChanged();

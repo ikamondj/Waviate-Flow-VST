@@ -294,15 +294,16 @@ void SceneComponent::paint(juce::Graphics& g)
     auto inputOutlineColour = [](NodeComponent* nc, int idx) -> juce::Colour {
         const auto& t = nc->getType();
         const auto& f = t.inputs[(size_t)idx];
-        return f.requiresCompileTimeKnowledge ? juce::Colours::darkred : juce::Colours::black;
+        return f.requiresCompileTimeKnowledge ? juce::Colours::mediumvioletred.darker() : juce::Colours::black;
         };
     auto outputOutlineColour = [](NodeComponent* nc) -> juce::Colour {
-        return nc->getNodeData().isCompileTimeKnown() ? juce::Colours::black : juce::Colours::red;
+        return nc->getNodeData().isCompileTimeKnown() ? juce::Colours::black : juce::Colours::mediumvioletred.darker();
         };
-    auto inputFillColour = [](NodeComponent* nc, int idx) -> juce::Colour {
+    auto inputFillColour = [this](NodeComponent* nc, int idx) -> juce::Colour {
         const auto& t = nc->getType();
         const auto& f = t.inputs[(size_t)idx];
-        return (f.requiredSize == 1) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold;
+        auto inp = nc->getNodeDataConst().getInput(idx);
+        return (f.requiredSize == 1 || (inp && inp->compileTimeSizeReady(this) && inp->getCompileTimeSize(this) == 1)) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold;
         };
     auto outputFillColour = [](NodeComponent* nc) -> juce::Colour {
             if (nc->getNodeDataConst().compileTimeSizeReady(nc->getOwningScene())) {
@@ -481,7 +482,7 @@ void SceneComponent::editNodeType()
     for (const std::unique_ptr<class NodeComponent>& node : nodes) {
         NodeData& data = node->getNodeData();
         const NodeType* type = data.getType();
-        if (type->address == "inputs/") {
+        if (type->isInputNode) {
             nodesFilteredByInputAndSorted.push_back(node.get());
         }
     }
@@ -509,36 +510,42 @@ void SceneComponent::editNodeType()
             }
         }
     exit_loop:
-        InputFeatures features(inputName, data.getType()->isBoolean, 0, requiresCompileTime);
+        int requiredSize = 0;
+        for (const auto& [downstream, index] : data.outputs) {
+            if (downstream) {
+                int sz = downstream->getType()->inputs[index].requiredSize;
+                if (sz > requiredSize) {
+                    requiredSize = sz;
+                }
+            }
+        }
+        InputFeatures features(inputName, data.getType()->outputType, requiredSize, requiresCompileTime);
         features.optionalInputComponent = node;
         customNodeType.inputs.push_back(features);
     }
     customNodeType.fromScene = this;
 
-    customNodeType.execute = [](const NodeData& node, UserInput& userInput, const std::vector<std::span<double>>& inputs, std::span<double>& output, RunnerInput& inlineInstance) {
+    customNodeType.execute = [](const NodeData& node, UserInput& userInput, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance) {
         NodeComponent* n = node.owningComponent;
-        Runner::run(*n, userInput, inputs);
+        Runner::run(n, userInput, inputs);
     };
-    customNodeType.getOutputSize = [this](const std::vector<NodeData*>& inputs, const std::vector<std::vector<double>>& d, RunnerInput& n, int, const NodeData&) {
+    customNodeType.getOutputSize = [this](const std::vector<NodeData*>& inputs, const std::vector<std::vector<ddtype>>& d, const RunnerInput& n, int, const NodeData&) {
         auto& outData = this->nodes[0]->getNodeDataConst();
-        std::vector<std::span<double>> outerInputs;
+        std::vector<std::span<ddtype>> outerInputs;
         for (auto v : d) {
-            outerInputs.push_back(std::span<double>(v.data(), v.size()));
-        }
-        if (!outData.compileTimeSizeReady(&n)) {
-            Runner::initialize(n, this, outerInputs);
+            outerInputs.push_back(std::span<ddtype>(v.data(), v.size()));
         }
         return outData.getCompileTimeSize(&n);
     };
 }
 
-void SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos)
+NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos)
 {
 
-    addNode(type, localPos, nullptr, -1);
+    return addNode(type, localPos, nullptr, -1);
 }
 
-void SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index)
+NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index)
 {
 
     // Create node
@@ -550,7 +557,6 @@ void SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos, No
     
     addAndMakeVisible(nodePtr);
 
-    processorRef.updateRegistryFull();
 
     onSceneChanged();
     if (toConnect) {
@@ -561,6 +567,7 @@ void SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos, No
             nodePtr->getNodeData().attachInput(0, toConnect, *this);
         }
     }
+	return *nodePtr;
 }
 
 
@@ -570,6 +577,24 @@ void SceneComponent::deleteNode(NodeComponent* node)
 	// Remove node from nodes vector
 	auto it = std::find_if(nodes.begin(), nodes.end(),
 		[node](const std::unique_ptr<NodeComponent>& n) { return n.get() == node; });
+
+    for (const std::unique_ptr<NodeComponent>& other : nodes) {
+        auto& type = other->getType();
+        if (other.get() != node) {
+            for (const auto& [c, i] : other->getNodeDataConst().outputs) {
+				if (c && c == &node->getNodeDataConst()) {
+					node->getNodeData().detachInput(i);
+				}
+            }
+            for (int i = 0; i < type.inputs.size(); ++i) {
+                auto input = other->getNodeDataConst().getInput(i);
+                if (input && input == &node->getNodeDataConst()) {
+                    other->getNodeData().detachInput(i);
+                }
+            }
+        }
+
+    }
 	if (it != nodes.end())
 	{
 		nodes.erase(it);
@@ -577,21 +602,12 @@ void SceneComponent::deleteNode(NodeComponent* node)
 
     auto& nodeType = node->getType();
 
-    for (const std::unique_ptr<NodeComponent>& other : nodes) {
-        auto& type = other->getType();
-		for (int i = 0; i < type.inputs.size(); ++i) {
-			auto input = other->getNodeDataConst().getInput(i);
-            if (input && input == &node->getNodeDataConst()) {
-                other->getNodeData().detachInput(i);
-            }
-		}
-    }
+    
 
 	// Remove the node component from the scene
 	removeChildComponent(node);
     onSceneChanged();
     
-    processorRef.updateRegistryFull();
 }
 
 void SceneComponent::ensureNodeConnectionsCorrect(RunnerInput* r) {
@@ -617,9 +633,43 @@ void SceneComponent::ensureNodeConnectionsCorrect(RunnerInput* r) {
     }
 }
 
+void SceneComponent::computeAllNodeWildCards() {
+    for (auto& nc : nodes) {
+        nc->getNodeData().markWildCardTypesDirty();
+    }
+
+    bool anyDirty;
+    do {
+        anyDirty = false;
+        int resolvedThisPass = 0;
+
+        for (auto& nc : nodes) {
+            auto& d = nc->getNodeData();
+            if (d.getTrueType() == InputType::dirty) {
+                std::unordered_set<NodeData*> visited;
+                bool clean = d.computeWildCardTypes(false, visited);
+                anyDirty |= !clean;
+                if (clean) ++resolvedThisPass;
+            }
+        }
+
+        if (anyDirty && resolvedThisPass == 0) {
+            // Stalemate: collapse remaining wildcards to ANY
+            for (auto& nc : nodes) {
+                auto& d = nc->getNodeData();
+                if (d.getTrueType() == InputType::dirty) {
+                    d.setTrueType(InputType::any);
+                }
+            }
+            anyDirty = false;
+        }
+    } while (anyDirty);
+}
+
 void SceneComponent::onSceneChanged()
 {
-    Runner::initialize(*this, this, std::vector<std::span<double>>());
+    Runner::initialize(*this, this, std::vector<std::span<ddtype>>());
+    computeAllNodeWildCards();
     ensureNodeConnectionsCorrect(this);
     processorRef.initializeRunner();
     

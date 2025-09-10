@@ -74,10 +74,10 @@ double deterministic_uniform_closed(double a, double b, double key) {
     return (x < b) ? x : b;
 }
 
-double coin_flip() {
+int64_t coin_flip() {
     static thread_local std::mt19937 gen(std::random_device{}());
     static thread_local std::bernoulli_distribution dist(0.5);
-    return dist(gen) ? 1.0 : 0.0;
+    return dist(gen) ? 1 : 0;
 }
 
 double valueNoise(double x) {
@@ -88,14 +88,14 @@ double voronoiNoise(double x) {
     return voronoi.GetValue(x, 0, 0);
 }
 
-double perlinNoise(double x, int octaveCount, double lacunarity, double roughness) {
+double perlinNoise(double x, int64_t octaveCount, double lacunarity, double roughness) {
     perlin.SetOctaveCount(octaveCount);
     perlin.SetLacunarity(lacunarity);
     perlin.SetPersistence(roughness);
     return perlin.GetValue(x,0,0);
 }
 
-double ridgedMultiNoise(double x, int octaveCount, double lacunarity) {
+double ridgedMultiNoise(double x, int64_t octaveCount, double lacunarity) {
     ridgedMulti.SetOctaveCount(octaveCount);
     ridgedMulti.SetLacunarity(lacunarity);
     return ridgedMulti.GetValue(x, 0, 0);

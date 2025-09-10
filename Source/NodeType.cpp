@@ -17,8 +17,8 @@
 
 std::unordered_map<uint64_t, const NodeType*> typeLookup;
 
-InputFeatures::InputFeatures(const juce::String& n, bool isBool, int requiredSize, bool reqCompileTime)
-    : name(n), isBoolean(isBool), requiredSize(requiredSize), requiresCompileTimeKnowledge(reqCompileTime) {
+InputFeatures::InputFeatures(const juce::String& n, InputType itype, int requiredSize, bool reqCompileTime)
+    : name(n), requiredSize(requiredSize), requiresCompileTimeKnowledge(reqCompileTime), inputType(itype) {
 }
 
 uint64_t NodeType::getNodeUserID() const
@@ -45,6 +45,9 @@ const NodeType* NodeType::getTypeByNodeID(uint64_t fullId)
 }
 
 void NodeType::putIdLookup(const NodeType& t) {
+    if (typeLookup.contains(t.NodeID)) {
+		jassertfalse; // duplicate ID
+    }
     typeLookup.insert({ t.NodeID, &t });
 }
 
@@ -63,6 +66,8 @@ NodeType::NodeType(uint64_t fullId, WaviateFlow2025AudioProcessor& processor)
 NodeType::NodeType(uint16_t nodeId) {
     this->setNodeId(0, nodeId);
 }
+
+
 
 NodeType::~NodeType()
 {

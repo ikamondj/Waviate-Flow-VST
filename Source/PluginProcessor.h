@@ -46,7 +46,6 @@ public:
     bool producesMidi() const override;
     bool isMidiEffect() const override;
     double getTailLengthSeconds() const override;
-    void updateRegistryFull();
 
     //==============================================================================
     int getNumPrograms() override;
@@ -79,11 +78,10 @@ public:
     void setAudibleScene(SceneComponent* scene);
     double maxOutBeforeDistortion = 10.0;
     static WaviateFlow2025AudioProcessor* GetActiveInstance();
-    std::array<RunnerInput, 3> bufferedRunners;
+    std::deque<std::unique_ptr<RunnerInput>> runners;
     
-    RunnerInput& getCurrentRunner() noexcept;
-    RunnerInput& getPreviousRunner() noexcept;
-    RunnerInput& getBuildableRunner() noexcept;
+    const RunnerInput* getCurrentRunner() noexcept;
+    const RunnerInput* getPreviousRunner() noexcept;
     void swapToNextRunner();
     static constexpr double fadeWindowSeconds = 0.020;
     static constexpr int bufferSize = 96000;
@@ -96,11 +94,10 @@ public:
     
 
 private:
+    std::mutex mutex;
     uint16_t currentLoadedTypeIndex = 0;
     uint64_t currentLoadedUserIndex = 1;
     class SceneComponent* audibleScene;
-    std::atomic<int> currentRunner = { 0 };
-    std::atomic<long long> totalSamplesProcessed, lastSwapSample;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WaviateFlow2025AudioProcessor)
 };

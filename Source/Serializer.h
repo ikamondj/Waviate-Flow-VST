@@ -10,8 +10,9 @@
 
 #pragma once
 #include <JuceHeader.h>
+#include <optional>
 #include <nlohmann/json.hpp>
 class Serializer {
 public:
-    static std::optional<juce::String> serializeToFile(class NodeType& type);
+    std::optional<nlohmann::json> serializeToJson(struct NodeType& type);
 };

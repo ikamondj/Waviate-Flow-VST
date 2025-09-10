@@ -39,72 +39,85 @@ void Runner::setupRecursive(NodeData* node, RunnerInput& inlineInstance) {
 
 
 
-std::span<double> Runner::run(RunnerInput& runnerInput, class UserInput& userInput, const std::vector<std::span<double>>& outerInputs)
+std::span<ddtype> Runner::run(const RunnerInput* runnerInputP, class UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
 {
-	if (runnerInput.nodeCopies.empty()) return std::span<double, 0>();
+	if (!runnerInputP) return std::span<ddtype, 0>();
+	auto& runnerInput = *runnerInputP;
+	if (runnerInput.nodeCopies.empty()) return std::span<ddtype, 0>();
 	for (NodeData* node : runnerInput.nodesOrder)
 	{
-		auto& output = runnerInput.nodeOwnership[node];
-		std::vector<std::span<double>> inputs;
-		std::vector<double> emptyInputDefaults(node->getNumInputs());
+		auto& output = runnerInput.nodeOwnership.at(node);
+		std::vector<std::span<ddtype>> inputs;
+		std::vector<ddtype> emptyInputDefaults(node->getNumInputs());
 		for (int i = 0; i < node->getNumInputs(); i += 1) {
 			if (auto inputNode = node->getInput(i)) {
-				auto& otherspan = runnerInput.nodeOwnership[inputNode];
+				auto& otherspan = runnerInput.nodeOwnership.at(inputNode);
 				inputs.push_back(otherspan);
 			}
 			else {
 				emptyInputDefaults[i] = node->getType()->inputs[i].defaultValue;
-				std::span<double> otherspan(&emptyInputDefaults[i], 1);
+				std::span<ddtype> otherspan(&emptyInputDefaults[i], 1);
 				inputs.push_back(otherspan);
 			}
 		}
-		double defaultIfNeeded = node->getNumericProperties().contains("defaultValue") ? node->getNumericProperty("defaultValue") : 0.0;
-		std::span<double> spanOverDefaultIfNeeded(&defaultIfNeeded, 1);
+		ddtype defaultIfNeeded = 0.0;
+		
+		
 		if (node->getType()->isInputNode) {
 			int inputIndex = node->inputIndex;
 			if (inputIndex >= 0 && inputIndex < outerInputs.size()) {
 				inputs.push_back(outerInputs[inputIndex]);
 			}
 			else {
+				if (node->getType()->outputType == InputType::decimal) {
+					defaultIfNeeded.d = node->getNumericProperties().contains("defaultValue") ? node->getNumericProperty("defaultValue") : 0.0;
+				}
+				else if (node->getType()->outputType == InputType::boolean) {
+					defaultIfNeeded.i = node->getNumericProperties().contains("defaultValue") ? (node->getNumericProperty("defaultValue") > 0.5 ? 1 : 0) : 0;
+				}
+				else {
+					defaultIfNeeded.i = node->getNumericProperties().contains("defaultValue") ? static_cast<int>(std::round(node->getNumericProperty("defaultValue"))) : 0;
+				}
+				std::span<ddtype> spanOverDefaultIfNeeded(&defaultIfNeeded, 1);
 				inputs.push_back(spanOverDefaultIfNeeded);
 			}
 		}
 		node->getType()->execute(*node, userInput, inputs, output, runnerInput);
 	}
-	return runnerInput.nodeOwnership[runnerInput.outputNode];
+	return runnerInput.nodeOwnership.at(runnerInput.outputNode);
 }
 
 
-std::span<double> Runner::getNodeField(NodeData* nodeData, std::unordered_map<NodeData*, std::span<double>>& nodeOwnership)
+std::span<ddtype> Runner::getNodeField(NodeData* nodeData, std::unordered_map<NodeData*, std::span<ddtype>>& nodeOwnership)
 {
 	return nodeOwnership[nodeData];
 }
 
-bool Runner::containsNodeField(NodeData* d, std::unordered_map<NodeData*, std::span<double>>& nodeOwnership)
+bool Runner::containsNodeField(NodeData* d, std::unordered_map<NodeData*, std::span<ddtype>>& nodeOwnership)
 {
 	return nodeOwnership.contains(d);
 }
 
-std::vector<double> Runner::findRemainingSizes(NodeData* node, std::unordered_map<NodeData*, std::vector<double>>& nodeCompileTimeOutputs, RunnerInput& inlineInstance, const std::vector<std::span<double>>& outerInputs)
+std::vector<ddtype> Runner::findRemainingSizes(NodeData* node, std::unordered_map<NodeData*, std::vector<ddtype>>& nodeCompileTimeOutputs, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs)
 {
-	std::vector<double> tempOutput;
-	std::vector<std::span<double>> actualspans;
+	std::vector<ddtype> tempOutput;
+	std::vector<std::span<ddtype>> actualspans;
 	UserInput user;
 
 	if (nodeCompileTimeOutputs.contains(node)) {
 		return nodeCompileTimeOutputs[node];
 	}
 	else {
-		std::vector<std::vector<double>> inputspans;
+		std::vector<std::vector<ddtype>> inputspans;
 		for (int i = 0; i < node->getNumInputs(); i += 1) {
 			NodeData* input = node->getInput(i);
 			if (input) {
-				std::vector<double> inputsOutput = findRemainingSizes(input, nodeCompileTimeOutputs, inlineInstance, outerInputs);
+				std::vector<ddtype> inputsOutput = findRemainingSizes(input, nodeCompileTimeOutputs, inlineInstance, outerInputs);
 				inputspans.push_back(inputsOutput);
 			}
 			else {
 
-				std::vector<double> inputsOutput = { node->getType()->inputs[i].defaultValue };
+				std::vector<ddtype> inputsOutput = { node->getType()->inputs[i].defaultValue };
 				inputspans.push_back(inputsOutput);
 			}
 		}
@@ -112,12 +125,12 @@ std::vector<double> Runner::findRemainingSizes(NodeData* node, std::unordered_ma
 			
 			int inputIndex = node->inputIndex;
 			if (outerInputs.empty()) {
-				std::vector<double> defaultValue;
+				std::vector<ddtype> defaultValue;
 				defaultValue.push_back(0.0); //TODO actual custom default values for functions
 				inputspans.push_back(defaultValue);
 			}
 			else {
-				inputspans.push_back(std::vector<double>(outerInputs[inputIndex].begin(), outerInputs[inputIndex].end()));
+				inputspans.push_back(std::vector<ddtype>(outerInputs[inputIndex].begin(), outerInputs[inputIndex].end()));
 			}
 			
 		}
@@ -141,12 +154,9 @@ std::vector<double> Runner::findRemainingSizes(NodeData* node, std::unordered_ma
 	}
 }
 
-void Runner::initializeTop(WaviateFlow2025AudioProcessor& processor, class SceneComponent* scene, const std::vector<std::span<double>>& outerInputs) {
-	initialize(processor.getBuildableRunner(), scene, outerInputs);
-	processor.swapToNextRunner();
-}
 
-void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const std::vector<std::span<double>>& outerInputs)
+
+void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const std::vector<std::span<ddtype>>& outerInputs)
 {
 	input.nodesOrder.clear();
 	input.nodeOwnership.clear();
@@ -192,7 +202,7 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 	for (auto& [node, ownership] : input.safeOwnership) {
 		if (node) {
 			auto [offset, size] = ownership;
-			input.nodeOwnership[node] = std::span<double>(input.field.data() + offset, size);
+			input.nodeOwnership[node] = std::span<ddtype>(input.field.data() + offset, size);
 		}
 
 	}
@@ -202,13 +212,13 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 	for (NodeData* node : input.nodesOrder) {
 		if (node->isCompileTimeKnown()) {
 			input.compileTimeKnown.insert(node);
-			std::vector<double> extraspace;
+			std::vector<ddtype> extraspace;
 			for (int i = 0; i < node->getNumInputs(); i += 1) {
 				auto input = node->getInput(i);
 				extraspace.push_back(node->getType()->inputs[i].defaultValue);
 			}
 			auto& output = input.nodeOwnership[node];
-			std::vector<std::span<double>> inputs;
+			std::vector<std::span<ddtype>> inputs;
 			for (int i = 0; i < node->getNumInputs(); i += 1) {
 
 				auto nodeInput = node->getInput(i);
@@ -217,11 +227,11 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 					inputs.push_back(otherspan);
 				}
 				else {
-					inputs.push_back(std::span<double>(&extraspace[i], 1));
+					inputs.push_back(std::span<ddtype>(&extraspace[i], 1));
 				}
 			}
-			double defaultIfNeeded = node->getNumericProperties().contains("defaultValue") ? node->getNumericProperty("defaultValue") : 0.0;
-			std::span<double> spanOverDefaultIfNeeded(&defaultIfNeeded, 1);
+			ddtype defaultIfNeeded = node->getNumericProperties().contains("defaultValue") ? node->getNumericProperty("defaultValue") : 0.0;
+			std::span<ddtype> spanOverDefaultIfNeeded(&defaultIfNeeded, 1);
 			if (node->getType()->isInputNode) {
 				int inputIndex = node->inputIndex;
 				if (inputIndex >= 0 && inputIndex < outerInputs.size()) {
@@ -249,5 +259,5 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 		
 	}
 	input.nodesOrder = tempNodesOrder;
-	std::vector<double> tempField;
+	std::vector<ddtype> tempField;
 }
