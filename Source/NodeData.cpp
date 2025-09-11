@@ -19,11 +19,27 @@
 
 
 
+
+
 NodeData::NodeData(const NodeType& type) : type(type), compileTimeSizes()
 {
+    if (type.fromScene) {
+		optionalRunnerInput = std::make_unique<RunnerInput>();
+    }
 }
 
-
+NodeData::NodeData(const NodeData& other) : NodeData(other.type) {
+	properties = other.properties;
+	numericProperties = other.numericProperties;
+	position = other.position;
+	inputNodes = other.inputNodes;
+	outputs = other.outputs;
+	compileTimeSizes = other.compileTimeSizes;
+	compileTimeSize = other.compileTimeSize;
+	inputIndex = other.inputIndex;
+	trueType = other.trueType;
+	isCopy = true;
+}
 
 
 const NodeType* NodeData::getType() const
@@ -36,12 +52,12 @@ const bool NodeData::isSingleton(RunnerInput* inlineInstance) const
     return getCompileTimeSize(inlineInstance) == 1;
 }
 
-const std::map<juce::String, juce::String>& NodeData::getProperties() const noexcept { return properties; }
-const juce::String NodeData::getStringProperty(const juce::String& key) const noexcept
+const std::map<std::string, std::string>& NodeData::getProperties() const noexcept { return properties; }
+const std::string NodeData::getStringProperty(const std::string& key) const noexcept
 {
 	return properties.contains(key) ? properties.at(key) : "";
 }
-const double NodeData::getNumericProperty(const juce::String& key) const noexcept
+const double NodeData::getNumericProperty(const std::string& key) const noexcept
 {
 	return numericProperties.contains(key) ? numericProperties.at(key) : 0.0;
 }
@@ -71,9 +87,9 @@ const std::vector<ddtype> NodeData::getCompileTimeValue(RunnerInput* inlineInsta
     getType()->execute(*this, fakeInput, spanInputs, outputSpan, *inlineInstance);
     return outputField;
 }
-const std::map<juce::String, double>& NodeData::getNumericProperties() const noexcept { return numericProperties; };
+const std::map<std::string, double>& NodeData::getNumericProperties() const noexcept { return numericProperties; };
 
-void NodeData::setProperty(const juce::String& key, const juce::String& value) { properties[key] = value; }
+void NodeData::setProperty(const std::string & key, const std::string& value) { properties[key] = value; }
 
 bool dfsNCTI(
     const NodeData* node,
@@ -124,7 +140,7 @@ std::unordered_map<const NodeData*, bool> memo;
 return dfsNCTI(this, visiting, memo);
 }
 
-void NodeData::setProperty(const juce::String& key, const double value) {
+void NodeData::setProperty(const std::string& key, const double value) {
 numericProperties[key] = value;
 }
 
@@ -143,9 +159,8 @@ NodeData* NodeData::getInput(size_t idx) {
     return inputNodes[idx];
 }
 
-bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
+bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r, SceneData* referenceScene)
 {
-    auto& registry = owningComponent->getOwningScene()->processorRef.getRegistry();
     if (idx >= type.inputs.size())
         return false; // out of bounds for this node type
 
@@ -167,7 +182,7 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
         for (int i = 0; i < other->getNumInputs(); i += 1) {
             auto upup = other->getInput(i);
             if (upup) {
-                tempStores.push_back(Runner::getNodeField(upup, owningComponent->getOwningScene()->nodeOwnership));
+                tempStores.push_back(Runner::getNodeField(upup, referenceScene->nodeOwnership));
             } else {
                 tempStores.push_back(empty);
             }
@@ -176,6 +191,7 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
        
         
         if (other) {
+            if (other )
             if (other->getCompileTimeSize(&r) != input.requiredSize) {
                 return false;
             }
@@ -185,30 +201,34 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
     bool typeMismatch = false;
     InputType from, to;
     InputType it = input.inputType;
+    auto ref = dynamic_cast<SceneComponent*>(referenceScene);
     if (other) {
         InputType ot = other->type.outputType;
         if (it == InputType::any) {
-            if (getTrueType() == InputType::dirty) {
+            auto trueType = getTrueType();
+			auto oTrueType = other->getTrueType();
+            if (trueType == InputType::dirty) {
                 return false;
             }
             else if (ot == InputType::followsInput) {
-                if (other->getTrueType() != getTrueType()) {
-                    to = getTrueType();
-                    from = other->getTrueType();
+                if (oTrueType != trueType && trueType != InputType::any && oTrueType != InputType::any) {
+                    to = trueType;
+                    from = oTrueType;
                 }
             }
-            else if (ot != getTrueType()) {
-				to = getTrueType();
+            else if (ot != trueType && trueType != InputType::any) {
+				to = trueType;
 				from = ot;
             }
         }
         else if (it != ot) {
             if (ot == InputType::followsInput) {
-                if (other->getTrueType() == InputType::dirty) {
+                auto trueType = other->getTrueType();
+                if (trueType == InputType::dirty) {
                     return false;
                 }
-				else if (other->getTrueType() != it) {
-					from = other->getTrueType();
+				else if (trueType != it && trueType != InputType::any) {
+					from = trueType;
 					to = it;
 					typeMismatch = true;
 				}
@@ -231,22 +251,24 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
 
     if (typeMismatch) {
         NodeType& typeToAdd = NodeType::getConversionType(from, to);
-	    auto thisPos = owningComponent->getPosition();
-	    auto otherPos = other->owningComponent->getPosition();
+	    auto thisPos = this->getPosition();
+	    auto otherPos = other->getPosition();
 	    auto avgPos = (thisPos + otherPos) / 2;
-	    NodeComponent& nc = owningComponent->getOwningScene()->addNode(typeToAdd, avgPos);
-	    NodeData& nd = nc.getNodeData();
-        inputNodes[idx] = &nd;
-        auto t = std::tuple<NodeData*, int>(this, idx);
-        if (!other->outputs.contains(t)) {
-            other->outputs.insert(t);
-        }
-        nd.inputNodes.push_back(other);
-	    auto t2 = std::tuple<NodeData*, int>(&nd, 0);
-	    if (!other->outputs.contains(t2)) {
-		    other->outputs.insert(t2);
-	    }
 
+        if (ref) {
+            NodeComponent& nc = ref->addNode(typeToAdd, avgPos);
+            NodeData& nd = nc.getNodeData();
+            inputNodes[idx] = &nd;
+            auto t = std::tuple<NodeData*, int>(this, idx);
+            if (!other->outputs.contains(t)) {
+                other->outputs.insert(t);
+            }
+            nd.inputNodes.push_back(other);
+            auto t2 = std::tuple<NodeData*, int>(&nd, 0);
+            if (!other->outputs.contains(t2)) {
+                other->outputs.insert(t2);
+            }
+        }
     }
     else {
         inputNodes[idx] = other;
@@ -257,12 +279,15 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r)
             }
         }
     }
+
+    if (ref) {
+        ref->onSceneChanged();
+    }
     
-    owningComponent->getOwningScene()->onSceneChanged();
     return true;
 }
 
-void NodeData::detachInput(size_t idx)
+void NodeData::detachInput(size_t idx, SceneData* referenceScene)
 {
     if (idx < inputNodes.size()) {
         if (inputNodes[idx]) {
@@ -272,7 +297,8 @@ void NodeData::detachInput(size_t idx)
             }
         }
         inputNodes[idx] = nullptr;
-        owningComponent->getOwningScene()->onSceneChanged();
+		auto ref = dynamic_cast<SceneComponent*>(referenceScene);
+        if (ref) { ref->onSceneChanged(); }
     }
 }
 
@@ -328,6 +354,7 @@ const int NodeData::getMaxOutputDimension(const std::vector<std::vector<ddtype>>
 
 bool NodeData::compileTimeSizeReady(const RunnerInput* inlineInstance) const
 {
+
     return this->compileTimeSizes.contains(inlineInstance);
 }
 
@@ -338,13 +365,17 @@ int NodeData::getCompileTimeSize(const RunnerInput* inlineInstance) const
         return compileTimeSizes.at(inlineInstance);
     }
     else {
-        throw std::logic_error("Node has not been compiled at this time!");
+		///DBG("Node of type " + getType()->name + " compile time size not ready!");
+        ///return 1;
+        throw std::invalid_argument("Node has not been compiled at this time!");
     }
 }
 
 void NodeData::setCompileTimeSize(const RunnerInput* inlineInstance, int s)
 {
+    _ASSERTE(_CrtCheckMemory());
     compileTimeSizes.insert_or_assign(inlineInstance, s);
+    _ASSERTE(_CrtCheckMemory());
 }
 
 
@@ -362,7 +393,7 @@ void NodeData::markWildCardTypesDirty()
 	trueType = InputType::dirty; // if confirmed but unknown this must be any. followsInput marks it as dirty
 }
 // Returns true if type is found, false if still dirty
-bool NodeData::computeWildCardTypes(bool exceedsGraphDepth,
+bool NodeData::computeWildCardTypes(
     std::unordered_set<NodeData*>& visited)
 {
     if (trueType != InputType::dirty) {
@@ -391,7 +422,7 @@ bool NodeData::computeWildCardTypes(bool exceedsGraphDepth,
                 visited.erase(this);
                 return true;
             }
-            else if (other->computeWildCardTypes(exceedsGraphDepth, visited)) {
+            else if (other->computeWildCardTypes(visited)) {
                 connectedToAnyButUnresolved = true;
                 if (other->getTrueType() != InputType::any) {
                     trueType = other->getTrueType();
@@ -417,7 +448,7 @@ bool NodeData::computeWildCardTypes(bool exceedsGraphDepth,
             return true;
         }
         else {
-            if (inputNode->computeWildCardTypes(exceedsGraphDepth, visited)) {
+            if (inputNode->computeWildCardTypes(visited)) {
                 if (inputNode->getTrueType() != InputType::any) {
                     trueType = inputNode->trueType;
                     visited.erase(this);
@@ -427,20 +458,10 @@ bool NodeData::computeWildCardTypes(bool exceedsGraphDepth,
         }
     }
 
-    // ---- Decide fallback ----
-    if (exceedsGraphDepth) {
-        if (allAnysDisconnected) {
-            trueType = InputType::any;
-            visited.erase(this);
-            return true;
-        }
-    }
-    else {
-        if (allAnysDisconnected && !connectedToAnyButUnresolved) {
-            trueType = InputType::any;
-            visited.erase(this);
-            return true;
-        }
+    if (allAnysDisconnected && !connectedToAnyButUnresolved) {
+        trueType = InputType::any;
+        visited.erase(this);
+        return true;
     }
 
     visited.erase(this);

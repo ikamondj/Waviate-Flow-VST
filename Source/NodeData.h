@@ -7,6 +7,7 @@
 
   ==============================================================================
 */
+#pragma once
 #include <vector>
 #include <map>
 #include <string>
@@ -14,28 +15,27 @@
 #include <JuceHeader.h>
 #include "InputType.h"
 #include "ddtype.h"
-#pragma once
-
-
+#include "RunnerInput.h"
 
 class NodeData
 {
 public:
+    NodeData(const NodeData& other);
 	NodeData(const struct NodeType& type);
 
     const struct NodeType* getType() const;
 
     const bool isSingleton(class RunnerInput* inlineInstance) const;
 
-    const std::map<juce::String, juce::String>& getProperties() const noexcept;
-	const juce::String getStringProperty(const juce::String& key) const noexcept;
-	const double getNumericProperty(const juce::String& key) const noexcept;
+    const std::map<std::string, std::string>& getProperties() const noexcept;
+	const std::string getStringProperty(const std::string& key) const noexcept;
+	const double getNumericProperty(const std::string& key) const noexcept;
 
     const std::vector<ddtype> getCompileTimeValue(class RunnerInput* inlineInstance) const noexcept;
-    const std::map<juce::String, double>& getNumericProperties() const noexcept;
-    void setProperty(const juce::String& key, const juce::String& value);
+    const std::map<std::string, double>& getNumericProperties() const noexcept;
+    void setProperty(const std::string& key, const std::string& value);
     bool needsCompileTimeInputs() const;
-    void setProperty(const juce::String& key, const double value);
+    void setProperty(const std::string& key, const double value);
 
     juce::Point<int> getPosition() const noexcept;
     void setPosition(juce::Point<int> newPos) noexcept;
@@ -44,10 +44,12 @@ public:
 
     NodeData* getInput(size_t idx);
 
-    // Attach only if index valid & no loop
-    bool attachInput(size_t idx, NodeData* other, class RunnerInput& inlineInstance);
+    std::unique_ptr<RunnerInput> optionalRunnerInput = nullptr;
 
-    void detachInput(size_t idx);
+    // Attach only if index valid & no loop
+    bool attachInput(size_t idx, NodeData* other, class RunnerInput& inlineInstance, class SceneData* referenceScene);
+
+    void detachInput(size_t idx, SceneData* referenceScene);
 
 	const bool isCompileTimeKnown() const noexcept;
 
@@ -55,7 +57,6 @@ public:
 
     const int getMaxOutputDimension(const std::vector<std::vector<ddtype>>&, class RunnerInput& context, int inputNum) const noexcept;
 
-    class NodeComponent* owningComponent = nullptr;
     bool compileTimeSizeReady(const class RunnerInput* inlineInstance) const;
     int getCompileTimeSize(const RunnerInput* inlineInstance) const;
     void setCompileTimeSize(const RunnerInput* inlineInstance, int s);
@@ -64,14 +65,15 @@ public:
     std::set<std::tuple<NodeData*, int>> outputs;
     enum class InputType getTrueType() const;
     void markWildCardTypesDirty();
-    bool computeWildCardTypes(bool exceedsGraphDepth, std::unordered_set<NodeData*>& visited);
+    bool computeWildCardTypes(std::unordered_set<NodeData*>& visited);
 	void setTrueType(InputType t);
     int inputIndex = -1;
+    bool isCopy = false;
 private:
     InputType trueType;
     
-    std::map<juce::String, juce::String> properties;
-	std::map<juce::String, double> numericProperties;
+    std::map<std::string, std::string> properties;
+	std::map<std::string, double> numericProperties;
     juce::Point<int> position;
     const NodeType& type;
    

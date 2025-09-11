@@ -25,7 +25,6 @@ struct InputFeatures {
     int requiredSize;
     bool requiresCompileTimeKnowledge;
     ddtype defaultValue = 0.0;
-    NodeComponent* optionalInputComponent;
 };
 
 class orableBool {
@@ -50,18 +49,19 @@ struct NodeType {
     bool isSingleton(const NodeData* node, const std::vector<std::span<ddtype>>& inputs) const;
     InputType outputType = InputType::decimal;
     bool alwaysOutputsRuntimeData = false;
-    class SceneComponent* fromScene = nullptr;
+    class SceneData* fromScene = nullptr;
     bool isInputNode = false;
     uint64_t NodeID;
+    uint64_t UserID;
     uint64_t getNodeUserID() const;
-    uint16_t getNodeId() const;
-    uint64_t getNodeFullID() const;
+    uint64_t getNodeId() const;
+    std::array<uint64_t, 2> getNodeFullID() const;
     static const NodeType* getTypeByNodeID(uint64_t fullId);
     static void putIdLookup(const NodeType& t);
-    void setNodeId(uint64_t userId, uint16_t nodeId);
+    void setNodeId(uint64_t userId, uint64_t nodeId);
     bool ownsScene = false;
-    NodeType(uint16_t nodeId);
-    NodeType(uint64_t fullId, class WaviateFlow2025AudioProcessor&);
+    NodeType(uint64_t nodeId);
+    NodeType(uint64_t userId, uint64_t nodeId, class WaviateFlow2025AudioProcessor&);
     int whichInputToFollowWildcard = -1;
 	static NodeType& getConversionType(InputType from, InputType to);
     ~NodeType();

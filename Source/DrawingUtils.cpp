@@ -88,20 +88,28 @@ void fillHexagon(juce::Graphics& g, const juce::Rectangle<float>& bounds)
 {
     juce::Path hex;
     auto centre = bounds.getCentre();
-    float radius = 0.5f * std::min(bounds.getWidth(), bounds.getHeight());
 
-    hex.startNewSubPath(centre.getX() + radius, centre.getY());
+    float rx = 0.5f * bounds.getWidth();
+    float ry = 0.5f * bounds.getHeight();
 
+    // first vertex at angle 0
+    hex.startNewSubPath(
+        centre.getX() + rx * std::cos(juce::MathConstants<float>::halfPi),
+        centre.getY() + ry * std::sin(juce::MathConstants<float>::halfPi));
+
+    // next 5 vertices
     for (int k = 1; k < 6; ++k)
     {
-        float angle = juce::MathConstants<float>::twoPi * (float)k / 6.0f;
-        hex.lineTo(centre.getX() + radius * std::cos(angle),
-            centre.getY() + radius * std::sin(angle));
+        float angle = juce::MathConstants<float>::twoPi * (float)k / 6.0f + juce::MathConstants<float>::halfPi;
+        hex.lineTo(
+            centre.getX() + rx * std::cos(angle),
+            centre.getY() + ry * std::sin(angle));
     }
 
     hex.closeSubPath();
     g.fillPath(hex);
 }
+
 
 void fillStar(juce::Graphics& g, const juce::Rectangle<float>& bounds)
 {

@@ -24,6 +24,8 @@
               file="Source/UserSessionManager.h"/>
       </GROUP>
       <GROUP id="{37CAC29E-88E6-DD01-B2F8-3A6590B52EBF}" name="Core">
+        <FILE id="L0Mguv" name="SceneData.cpp" compile="1" resource="0" file="Source/SceneData.cpp"/>
+        <FILE id="ixrTCW" name="SceneData.h" compile="0" resource="0" file="Source/SceneData.h"/>
         <FILE id="WRcyQK" name="InputType.h" compile="0" resource="0" file="Source/InputType.h"/>
         <FILE id="lzPMN3" name="ddtype.h" compile="0" resource="0" file="Source/ddtype.h"/>
         <GROUP id="{64960AC0-DF34-E9B2-9A54-DDD55378AFF5}" name="Utils">
@@ -33,6 +35,8 @@
         <GROUP id="{E3BF9F4F-F81D-3CED-8688-BBB0E1366367}" name="Persistence">
           <FILE id="DqSX1P" name="Serializer.cpp" compile="1" resource="0" file="Source/Serializer.cpp"/>
           <FILE id="bH2Kve" name="Serializer.h" compile="0" resource="0" file="Source/Serializer.h"/>
+          <FILE id="IvuQWX" name="Validator.cpp" compile="1" resource="0" file="Source/Validator.cpp"/>
+          <FILE id="K5CEhj" name="Validator.h" compile="0" resource="0" file="Source/Validator.h"/>
         </GROUP>
         <FILE id="mPbU9p" name="CircleBuffer.cpp" compile="1" resource="0"
               file="Source/CircleBuffer.cpp"/>

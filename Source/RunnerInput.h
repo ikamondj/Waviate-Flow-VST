@@ -7,22 +7,25 @@
 
   ==============================================================================
 */
+
+#pragma once
 #include <mutex>
 #include <unordered_map>
 #include <span>
 #include <unordered_set>
-#include "NodeData.h"
-#pragma once
+#include <vector>
+#include "ddtype.h"
+class NodeData;
 class RunnerInput {
 public:
     virtual ~RunnerInput() = default; // makes it polymorphic
-    std::vector<NodeData> nodeCopies;
-    std::vector<ddtype> field;
+    std::vector<std::unique_ptr<NodeData>> nodeCopies;
+    std::vector<union ddtype> field;
     std::vector<class NodeData*> nodesOrder;
     std::unordered_map<NodeData*, std::span<ddtype>> nodeOwnership;
     std::unordered_map<NodeData*, std::tuple<int, int>> safeOwnership;
     std::unordered_set<NodeData*> compileTimeKnown;
     std::unordered_map<NodeData*, std::vector<ddtype>> nodeCompileTimeOutputs;
-    std::unordered_map<const NodeData*, NodeData*> remap;
+    std::unordered_map<NodeData*, NodeData*> remap;
     NodeData* outputNode = nullptr;
 };

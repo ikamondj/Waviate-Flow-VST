@@ -10,7 +10,7 @@
 
 #pragma once
 #include <JuceHeader.h>
-class UserData {
+struct UserData {
     juce::String username;
-
+    uint64_t userId;
 };

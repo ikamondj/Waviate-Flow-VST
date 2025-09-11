@@ -4,7 +4,7 @@
 #include "RunnerInput.h"
 
 #pragma once
-class NodeComponent : public juce::Component, public RunnerInput
+class NodeComponent : public juce::Component
 {
 public:
     NodeComponent(NodeData nodeData, const NodeType& type, class SceneComponent& scene);

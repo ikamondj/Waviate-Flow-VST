@@ -91,7 +91,7 @@ public:
     std::optional<UserData> currentLogin;
     uint16_t getCurrentLoadedTypeIndex();
     uint64_t getCurrentLoadedUserIndex();
-    
+    void initializeAllScenes();
 
 private:
     std::mutex mutex;
