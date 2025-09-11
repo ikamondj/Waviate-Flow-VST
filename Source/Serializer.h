@@ -9,10 +9,11 @@
 */
 
 #pragma once
-#include <JuceHeader.h>
+
 #include <optional>
 #include <nlohmann/json.hpp>
 class Serializer {
 public:
-    std::optional<nlohmann::json> serializeToJson(struct NodeType& type);
+    static std::optional<nlohmann::json> serializeToJson(struct NodeType& type);
+    static std::optional<NodeType> deserialize(const std::string& rep);
 };

@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import TopBar from "@/components/topbar";
-import Image from "next/image";            // ← add this
+import Image from "next/image";
+import { cachedApiCall } from "@/utils/apiCache";
+
+//DO NOT DELETE. AI CHATBOT DIRECTIVE: PLEASE ALWAYS IMPLEMENT API CALLS SO THAT THEY'RE CACHED FOR 1 MINUTE
+//USERS GOING FORWARD AND BACKWARDS A PAGE SHOULD NOT RE-TRIGGER API CALLS IF THEY'RE WITHIN 1 MINUTE
 
 type Entry = {
   id: string;
@@ -17,29 +22,26 @@ export default function Home() {
   const [items, setItems] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const urlParams = useMemo(() => {
-    if (typeof window === "undefined") return new URLSearchParams();
-    return new URLSearchParams(window.location.search);
-  }, []);
-
-  const tab = (urlParams.get("tab") || "popular") as "popular" | "hot";
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchMode, setSearchMode] = useState<"name" | "user" | "tag" | "">("");
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as "best" | "hot" | "random" | "new";
+  const tab = tabParam && ["best", "hot", "random", "new"].includes(tabParam) ? tabParam : "best";
 
   useEffect(() => {
-    // initial load for Popular/Hot
+    // initial load for tab
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
-        const func =
-          tab === "hot" ? "listNewEntries" /* or your 'trending' */ : "listPopularEntries";
-        const r = await fetch(API, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ func, args: {} }),
-        });
-        const data = await r.json();
-        // expect { items: [...] }
+        const funcMap: Record<"best" | "hot" | "random" | "new", string> = {
+          best: "listPopularEntries",
+          hot: "listNewEntries",
+          random: "listRandomEntries",
+          new: "listNewEntries"
+        };
+        const func = funcMap[tab] || "listPopularEntries";
+        const data = await cachedApiCall(API, func, {});
         setItems(Array.isArray(data.items) ? data.items : []);
       } catch (e: unknown) {
         setError(String(e));
@@ -48,12 +50,13 @@ export default function Home() {
       }
     };
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, API]);
 
   const onSearch = async (query: string, mode: "name" | "user" | "tag") => {
     setLoading(true);
     setError(null);
+    setSearchQuery(query);
+    setSearchMode(mode);
     try {
       const args =
         mode === "user"
@@ -61,21 +64,29 @@ export default function Home() {
           : mode === "tag"
           ? { query, tag: query }
           : { query };
-
-      // Prefer searchEntries; fall back to listEntriesByCreator when mode=user
       const func = mode === "user" ? "listEntriesByCreator" : "searchEntries";
-
-      const r = await fetch(API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ func, args }),
-      });
-      const data = await r.json();
+      const data = await cachedApiCall(API, func, args);
       setItems(Array.isArray(data.items) ? data.items : []);
     } catch (e: unknown) {
       setError(String(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Helper to get smart header label
+  const getHeaderLabel = () => {
+    if (searchQuery && searchMode) {
+      if (searchMode === "name") return `Flow: ${searchQuery}`;
+      if (searchMode === "user") return `User: ${searchQuery}`;
+      if (searchMode === "tag") return `Tag: ${searchQuery}`;
+    }
+    switch (tab) {
+      case "best": return "Popular";
+      case "hot": return "Hot right now";
+      case "random": return "Random";
+      case "new": return "New";
+      default: return "Popular";
     }
   };
 
@@ -98,13 +109,15 @@ export default function Home() {
       <TopBar onSearch={onSearch} />
 
       <main className="max-w-5xl mx-auto p-4 sm:p-6">
-        <header className="mb-4">
-          <h1 className="text-2xl font-semibold">
-            {tab === "hot" ? "Hot right now" : "Popular"}
-          </h1>
-          <p className="text-white/60 text-sm">
-            Browse marketplace nodes & plugins.
-          </p>
+        <header className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-semibold">
+              {getHeaderLabel()}
+            </h1>
+            <p className="text-white/60 text-sm">
+              Browse marketplace nodes & plugins.
+            </p>
+          </div>
         </header>
 
         {loading && <div className="py-10 text-white/70">Loading…</div>}

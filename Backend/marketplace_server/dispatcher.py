@@ -42,6 +42,8 @@ FUNCTIONS = {
     "listCategories": content.list_categories,
     "listNewEntries": content.list_new_entries,
     "listPopularEntries": content.list_popular_entries,
+    "listBestRatedEntries": content.list_best_rated_entries,
+    "listRandomEntries": content.list_random_entries,
 
     # Rating
     "createReview": rating.create_review,

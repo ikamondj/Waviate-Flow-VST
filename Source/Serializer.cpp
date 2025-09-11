@@ -22,3 +22,7 @@ std::optional<nlohmann::json> Serializer::serializeToJson(NodeType& type)
 	j["address"] = type.address.toStdString();
     return j;
 }
+
+static std::optional<NodeType> deserialize(const std::string& rep) {
+  return std::nullopt(); //TODO
+}

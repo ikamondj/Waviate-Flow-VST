@@ -23,26 +23,24 @@ export default function TopBar({
           </button>
 
           <nav className="ml-4 flex items-center gap-2 text-sm">
-            <button
-              onClick={() => router.replace("/?tab=popular")}
-              className={`rounded-full px-3 py-1 border border-white/15 hover:bg-white/10 transition ${
-                (pathname === "/" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "popular")
-                  ? "bg-white/15"
-                  : ""
-              }`}
-            >
-              Popular
-            </button>
-            <button
-              onClick={() => router.replace("/?tab=hot")}
-              className={`rounded-full px-3 py-1 border border-white/15 hover:bg-white/10 transition ${
-                (pathname === "/" && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === "hot")
-                  ? "bg-white/15"
-                  : ""
-              }`}
-            >
-              Hot right now
-            </button>
+            {[
+              { key: "best", label: "Popular" },
+              { key: "hot", label: "Hot right now" },
+              { key: "random", label: "Random" },
+              { key: "new", label: "New" }
+            ].map(tabItem => (
+              <button
+                key={tabItem.key}
+                onClick={() => router.replace(`/?tab=${tabItem.key}`)}
+                className={`rounded-full px-3 py-1 border border-white/15 hover:bg-white/10 transition ${
+                  (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tab") === tabItem.key)
+                    ? "bg-white/15"
+                    : ""
+                }`}
+              >
+                {tabItem.label}
+              </button>
+            ))}
           </nav>
         </div>
 
