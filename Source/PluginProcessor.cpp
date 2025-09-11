@@ -36,7 +36,8 @@ WaviateFlow2025AudioProcessor::WaviateFlow2025AudioProcessor()
     scenes.reserve(1048576);
     if (scenes.empty()) {
         addScene("main");
-        audibleScene = activeScene = scenes[0].get();
+        audibleScene = scenes[0].get();
+        setActiveScene(audibleScene);
     }
 	runners.push_back(std::make_unique<RunnerInput>());
     runners.push_back(std::make_unique<RunnerInput>());
@@ -426,6 +427,17 @@ void WaviateFlow2025AudioProcessor::setAudibleScene(SceneComponent* scene)
     audibleScene = scene;
     if (prev != audibleScene) {
         this->initializeRunner();
+    }
+}
+
+void WaviateFlow2025AudioProcessor::setActiveScene(SceneComponent* scene)
+{
+    scene->setVisible(true);
+    scene->toFront(true);
+    activeScene = scene;
+    if (auto editor = getCurrentEditor()) {
+        editor->browser.repaint();
+        editor->scenePropertiesComponent.setActiveScene(scene);
     }
 }
 

@@ -47,7 +47,7 @@ void BrowserModel::paintListBoxItem(int rowNumber, juce::Graphics& g,
 
 void BrowserModel::listBoxItemClicked(int row, const juce::MouseEvent&)
 {
-    // Just select — ListBox handles selection highlighting automatically.
+    // Just select ï¿½ ListBox handles selection highlighting automatically.
     if (auto* lb = dynamic_cast<juce::ListBox*>(&editorRef.browser))
         lb->selectRow(row);
     if (row >= 0 && row < getNumRows())
@@ -76,10 +76,7 @@ void BrowserModel::listBoxItemDoubleClicked(int row, const juce::MouseEvent&e)
         auto* scene = editorRef.audioProcessor.getScenes()[row].get();
         if (scene)
         {
-            scene->setVisible(true);
-            scene->toFront(true); // bring to front
-            editorRef.audioProcessor.activeScene = scene;
-            editorRef.browser.repaint();
+            editorRef.audioProcessor.setActiveScene(scene);
         }
     }
 }

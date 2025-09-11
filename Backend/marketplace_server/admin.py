@@ -82,7 +82,8 @@ def update_random_daily_table(random_entries):
             {"minute": minute, "entry_ids": entry_str}
         )
 
-def admin_setup_daily_random():
+def admin_setup_daily_random(access_token: str):
+    check_access_token(access_token)
     entry_ids = get_marketplace_entry_ids()
     num_entries = len(entry_ids)
     if num_entries == 0:
@@ -91,5 +92,6 @@ def admin_setup_daily_random():
     random_entries = generate_random_daily_entries(entry_ids, k)
     update_random_daily_table(random_entries)
 
-def admin_setup_daily_hottest():
+def admin_setup_daily_hottest(access_token: str):
+    check_access_token(access_token)
     return {"message": "not implemented"}

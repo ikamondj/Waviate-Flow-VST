@@ -13,6 +13,7 @@
 #include "NodeType.h"
 #include "NodeComponent.h"
 #include "SceneComponent.h"
+#include "ScenePropertiesComponent.h"
 #include "NodeData.h"
 #include "BrowserModel.h"
 #include "RunnerInput.h"
@@ -40,6 +41,7 @@ public:
     juce::Component canvas;
     juce::StretchableLayoutManager horizontalLayout;
     juce::StretchableLayoutResizerBar resizerBar;
+    ScenePropertiesComponent scenePropertiesComponent;
     
     void deselectBrowserItem();
     void timerCallback() override;

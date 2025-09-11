@@ -56,6 +56,7 @@ public:
     void addNodeOfType(int typeId, juce::Point<int> localPos, class SceneComponent* scene);
     void addScene(const juce::String& name);
     void deleteScene(SceneComponent* scene);
+    
 
     std::vector<std::unique_ptr<SceneComponent>>& getScenes();
     const std::vector<NodeType>& getRegistry() const;
@@ -76,6 +77,7 @@ public:
     std::array<double, 128> noteHzOfficialValues;
     void initializeRegistry();
     void setAudibleScene(SceneComponent* scene);
+    void setActiveScene(SceneComponent* scene);
     double maxOutBeforeDistortion = 10.0;
     static WaviateFlow2025AudioProcessor* GetActiveInstance();
     std::deque<std::unique_ptr<RunnerInput>> runners;
