@@ -26,14 +26,14 @@ uint64_t NodeType::getNodeUserID() const
     return NodeID >> 16;
 }
 
-uint16_t NodeType::getNodeId() const
+uint64_t NodeType::getNodeId() const
 {
     return static_cast<uint16_t>(NodeID & static_cast<uint64_t>(0xFFFFL));
 }
 
-uint64_t NodeType::getNodeFullID() const
+std::array<uint64_t,2> NodeType::getNodeFullID() const
 {
-    return NodeID;
+    return { UserID, NodeID };
 }
 
 const NodeType* NodeType::getTypeByNodeID(uint64_t fullId)
@@ -51,19 +51,21 @@ void NodeType::putIdLookup(const NodeType& t) {
     typeLookup.insert({ t.NodeID, &t });
 }
 
-void NodeType::setNodeId(uint64_t userId, uint16_t nodeId) {
-    NodeID = userId << 16 | nodeId;
+void NodeType::setNodeId(uint64_t userId, uint64_t nodeId) {
+    NodeID = nodeId;
+    UserID = userId;
 }
 
-NodeType::NodeType(uint64_t fullId, WaviateFlow2025AudioProcessor& processor)
+NodeType::NodeType(uint64_t userId, uint64_t nodeId, WaviateFlow2025AudioProcessor& processor)
 {
-    juce::String name;
+    std::string name; //TODO get name
     fromScene = new SceneComponent(processor, name);
     ownsScene = true;
-    this->NodeID = fullId;
+    this->NodeID = nodeId;
+    this->UserID = userId;
 }
 
-NodeType::NodeType(uint16_t nodeId) {
+NodeType::NodeType(uint64_t nodeId) {
     this->setNodeId(0, nodeId);
 }
 

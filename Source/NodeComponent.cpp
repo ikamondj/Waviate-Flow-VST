@@ -86,6 +86,7 @@ void NodeComponent::paint(juce::Graphics& g)
     g.setFont(10.0f * (float)scale);
     auto trueType = getNodeDataConst().getTrueType();
     for (int i = 0; i < (int)t.inputs.size(); ++i) {
+		if (getType().isInputNode) break; // no input pins on input nodes
         const auto& in = t.inputs[(size_t)i];
         
         InputType inputType = in.inputType;
@@ -96,36 +97,25 @@ void NodeComponent::paint(juce::Graphics& g)
 
         juce::Rectangle<float> pinBounds(cx - pinRadius, cy - pinRadius, pinDiameter, pinDiameter);
         juce::Rectangle<float> inner = pinBounds.reduced(4.0f * (float)scale);
+        juce::Rectangle<float> hexagonBounds(pinBounds.getTopLeft().x, inner.getTopLeft().y, pinDiameter, inner.getHeight());
 
-        g.setColour(inputOutlineColour(i));
-        if (inputType == InputType::any) {
-			auto inputNode = getNodeDataConst().getInput((size_t)i);
-            if (inputNode && inputNode->getType()->outputType != InputType::followsInput) {
-				inputType = inputNode->getType()->outputType;
-            }
-            else if (getType().outputType == InputType::followsInput) {
-                if (!getNodeDataConst().outputs.empty()) {
-                    for (auto& [c,indx] : getNodeDataConst().outputs) {
-                        auto dit = c->getType()->inputs[indx].inputType;
-                        if (dit != InputType::any) {
-                            inputType = dit;
-                        }
-                    }
-                }
-            }
-        }
+
         g.setColour(inputOutlineColour(i));
         g.fillEllipse(pinBounds);
 
 
         g.setColour(inputFillColour(i));
-        auto renderedType = inputType == InputType::any && trueType != InputType::dirty ? trueType : inputType;
+        auto renderedType = inputType == InputType::any ? trueType : inputType;
         switch (renderedType) {
         case InputType::boolean: g.fillRect(inner); break;
         case InputType::decimal: g.fillEllipse(inner); break;
-        case InputType::integer: fillHexagon(g, inner); break;
+        case InputType::integer: fillHexagon(g, hexagonBounds); break;
 		case InputType::any: 
 		case InputType::followsInput: fillStar(g, pinBounds); break;
+        case InputType::dirty:
+			g.setColour(juce::Colours::red);
+			g.fillEllipse(inner);
+			break;
         }
 
         const int textX = (int)(rect.getX() - (sides - pinDiameter) * 0.5f + pinDiameter + 2.0f);
@@ -143,43 +133,24 @@ void NodeComponent::paint(juce::Graphics& g)
 
         juce::Rectangle<float> pinBounds(cx - pinRadius, cy - pinRadius, pinDiameter, pinDiameter);
         juce::Rectangle<float> inner = pinBounds.reduced(4.0f * (float)scale);
+        juce::Rectangle<float> hexagonBounds(pinBounds.getTopLeft().x, inner.getTopLeft().y, pinDiameter, inner.getHeight());
 
         g.setColour(outputOutlineColour());
-        if (inputType == InputType::followsInput) {
-            if (!getNodeDataConst().outputs.empty()) {
-                for (auto& [c, indx] : getNodeDataConst().outputs) {
-                    auto dit = c->getType()->inputs[indx].inputType;
-                    if (dit != InputType::any) {
-                        inputType = dit;
-                    }
-                }
-            }
-            else {
-                const auto& input = getType().inputs[getType().whichInputToFollowWildcard];
-                if (input.inputType == InputType::any) {
-                    auto inputNode = getNodeDataConst().getInput((size_t)getType().whichInputToFollowWildcard);
-                    if (inputNode && inputNode->getType()->outputType != InputType::followsInput) {
-                        inputType = inputNode->getType()->outputType;
-                    }
-                    else {
-                        inputType = InputType::any;
-                    }
-                }
-            }
-            
-        }
         g.fillEllipse(pinBounds);
 
         g.setColour(outputFillColour());
-        auto renderedType = inputType == InputType::followsInput && trueType != InputType::dirty ? trueType : inputType;
-        switch (inputType) {
+        auto renderedType = inputType == InputType::followsInput ? trueType : inputType;
+        switch (renderedType) {
         case InputType::boolean: g.fillRect(inner); break;
         case InputType::decimal: g.fillEllipse(inner); break;
-        case InputType::integer: fillHexagon(g, pinBounds); break;
+        case InputType::integer: fillHexagon(g, hexagonBounds); break;
         case InputType::followsInput:
 		case InputType::any: 
             fillStar(g, pinBounds); 
             break;
+		case InputType::dirty:
+			g.setColour(juce::Colours::black);
+			fillStar(g,inner);
         }
     }
 }
@@ -332,7 +303,7 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                     auto& data = comp->getNodeData();
                     for (int j = 0; j < data.getNumInputs(); ++j) {
                         if (data.getInput(j) == &getNodeData()) {
-                            data.detachInput(j);
+                            data.detachInput(j, comp->getOwningScene());
                             scene->repaint();
                             return; // detach only once
                         }
@@ -340,7 +311,7 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                 }
             }
             else if (overInput >= 0) {
-                getNodeData().detachInput(overInput);
+                getNodeData().detachInput(overInput, getOwningScene());
                 scene->repaint();
                 return; // detach only once
             }
@@ -395,6 +366,7 @@ void NodeComponent::mouseDrag(const juce::MouseEvent& e)
         auto delta = e.getOffsetFromDragStart();
         auto newPos = dragStartPos + delta;
         setTopLeftPosition(newPos);
+        getNodeData().setPosition(newPos);
 
         owningScene.repaint();
     }
@@ -426,7 +398,7 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e)
                     targetNode->getNodeData().attachInput(
                         targetInput,
                         &this->getNodeData(),
-                        *scene
+                        *scene, getOwningScene()
                     );
                 }
             }
@@ -436,32 +408,33 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e)
                     this->getNodeData().attachInput(
                         pinDragInputIndex,
                         &targetNode->getNodeData(),
-                        *scene
+                        *scene, getOwningScene()
                     );
                 }
                 else if (pinDragInputIndex >= 0) {
                     // Dropped in empty space: detach and open menu (old Pin behavior)
-                    this->getNodeData().detachInput(pinDragInputIndex);
+                    this->getNodeData().detachInput(pinDragInputIndex, getOwningScene());
                     scene->showMenu(e.position.toInt() + getPosition(), &this->getNodeData(), pinDragInputIndex);
                 }
             }
         }
         else {
             // No target node: if drag started from an input, detach + menu
-            std::function<bool(const NodeType& t)> condition = [](const NodeType& t) {return true; };
+			auto scene = getOwningScene();
+            std::function<bool(const NodeType& t)> condition = [scene](const NodeType& t) {return scene->canPlaceType(t); };
             if (pinDragInputIndex >= 0) {
-                this->getNodeData().detachInput(pinDragInputIndex);
+                this->getNodeData().detachInput(pinDragInputIndex, getOwningScene());
                 condition = [&](const NodeType& t) {
                     if (this->getType().inputs[pinDragInputIndex].requiresCompileTimeKnowledge || this->getNodeDataConst().needsCompileTimeInputs()) {
                         if (t.alwaysOutputsRuntimeData) {
                             return false;
                         }
                     }
-                    return true;
+                    return scene->canPlaceType(t);
                     };
             }
             else {
-                condition = [](const NodeType& t) { return t.inputs.size() >= 1; };
+                condition = [scene](const NodeType& t) { return t.inputs.size() >= 1 && scene->canPlaceType(t); };
             }
             scene->showMenu(e.position.toInt() + getPosition(), &this->getNodeData(), pinDragInputIndex, condition);
         }
@@ -487,7 +460,7 @@ void NodeComponent::mouseUp(const juce::MouseEvent& e)
 
 void NodeComponent::mouseDoubleClick(const juce::MouseEvent& event)
 {
-    if (auto scene = getType().fromScene) {
+    if (auto scene = dynamic_cast<SceneComponent*>(getType().fromScene)) {
         scene->setVisible(true);
         scene->toFront(true); // bring to front
         getProcessorRef().activeScene = scene;
@@ -519,7 +492,7 @@ void NodeComponent::updateSize()
 
 bool NodeComponent::keyPressed(const juce::KeyPress& k)
 {
-    auto editor = getOwningScene()->processorRef.getCurrentEditor();
+    auto editor = getOwningScene()->processorRef->getCurrentEditor();
     if (editor) {
         return editor->keyPressed(k);
     }
@@ -576,7 +549,7 @@ void NodeComponent::resized()
 
 WaviateFlow2025AudioProcessor& NodeComponent::getProcessorRef()
 {
-    return getOwningScene()->processorRef;
+    return *getOwningScene()->processorRef;
 }
 
 

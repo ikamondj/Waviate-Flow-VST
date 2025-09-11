@@ -40,7 +40,7 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
         juce::String name = start;
         bool nameFound = false;
         for (auto& scene : audioProcessor.scenes) {
-            if (scene->getName() == name) {
+            if (scene->getSceneName() == name) {
                 nameFound = true;
             }
         }
@@ -50,7 +50,7 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
                 nameFound = false;
                 name = start + " " + juce::String(i);
                 for (auto& scene : audioProcessor.scenes) {
-                    if (scene->getName() == name) {
+                    if (scene->getSceneName() == name) {
                         nameFound = true;
                     }
                     
@@ -60,7 +60,7 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
             }
             
         }
-        audioProcessor.scenes[row]->setName(name);
+        audioProcessor.scenes[row]->setSceneName(name.toStdString());
         audioProcessor.scenes[row]->customNodeType.name = name;
     };
 
@@ -70,7 +70,7 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
 
         bool nameFound = false;
         for (auto& scene : audioProcessor.scenes) {
-            if (scene->getName() == name) {
+            if (scene->getSceneName() == name) {
                 nameFound = true;
             }
         }
@@ -81,7 +81,7 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
                 nameFound = false;
                 for (auto& scene : audioProcessor.scenes) {
                     name = "New Function " + juce::String(i);
-                    if (scene->getName() == name) {
+                    if (scene->getSceneName() == name) {
                         nameFound = true;
                     }
                     

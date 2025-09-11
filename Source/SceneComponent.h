@@ -11,21 +11,21 @@
 #include "NodeType.h"
 #include "RunnerInput.h"
 #include "Runner.h"
+#include "SceneData.h"
 #pragma once
 
 
-struct SceneData; 
-class SceneComponent : public juce::Component, public RunnerInput
+
+class SceneComponent : public juce::Component, public SceneData
 {
 public:
-    SceneComponent(class WaviateFlow2025AudioProcessor& processor, const juce::String& name);
-    SceneComponent(class WaviateFlow2025AudioProcessor& processor, const uint64_t fullId);
+    SceneComponent(class WaviateFlow2025AudioProcessor& processor, const std::string& name);
+    SceneComponent(class WaviateFlow2025AudioProcessor& processor, const uint64_t userId, const uint64_t nodeId);
     ~SceneComponent();
 
-    void constructWithName(const juce::String& name);
-    juce::String getNameFromJson(const juce::String& json);
-    juce::String getJsonFromFullID(const uint64_t fullId);
-    void initSceneWithJson(const juce::String& json);
+    void onSceneChanged();
+
+	void constructWithName(const std::string& name) override;
 
 
     void mouseDown(const juce::MouseEvent& e) override;
@@ -46,24 +46,25 @@ public:
     juce::Point<int> currentMouse;
     bool isLeftDragging = false;
     void paint(juce::Graphics& g) override;
-
-	WaviateFlow2025AudioProcessor& processorRef;
-	std::vector<std::unique_ptr<class NodeComponent>> nodes;
+    std::vector<std::unique_ptr<class NodeComponent>> nodes; 
+	
+    std::vector<NodeComponent*> highlightedNodes;
+	std::unordered_map<NodeData*, NodeComponent*> nodeToComponentMap;
     NodeComponent* highlightedNode;
     bool canPlaceType(const NodeType& type);
-    void editNodeType();
+    
     
 
 	NodeComponent& addNode(const NodeType& type, juce::Point<int> localPos);
     NodeComponent& addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index);
 	void deleteNode(NodeComponent* node);
     void ensureNodeConnectionsCorrect(RunnerInput*);
-    void computeAllNodeWildCards();
+    
     juce::TextButton deleteSceneButton{ "x" };
     juce::TextEditor sceneNameBox;
-    void onSceneChanged();
     
-    NodeType customNodeType;
+    
+    
     double logScale = 0;
     juce::PopupMenu buildNodeTypeMenuCache();
     juce::PopupMenu buildNodeTypeMenuCache(std::function<bool(const NodeType&)> condition);

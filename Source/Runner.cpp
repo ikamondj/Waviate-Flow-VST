@@ -18,6 +18,8 @@
 
 
 
+
+
 void Runner::setupRecursive(NodeData* node, RunnerInput& inlineInstance) {
 	
 	if (!node || inlineInstance.safeOwnership.contains(node)) return;
@@ -98,21 +100,22 @@ bool Runner::containsNodeField(NodeData* d, std::unordered_map<NodeData*, std::s
 	return nodeOwnership.contains(d);
 }
 
-std::vector<ddtype> Runner::findRemainingSizes(NodeData* node, std::unordered_map<NodeData*, std::vector<ddtype>>& nodeCompileTimeOutputs, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs)
+		
+std::vector<ddtype> Runner::findRemainingSizes(NodeData* node, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs)
 {
 	std::vector<ddtype> tempOutput;
 	std::vector<std::span<ddtype>> actualspans;
 	UserInput user;
 
-	if (nodeCompileTimeOutputs.contains(node)) {
-		return nodeCompileTimeOutputs[node];
+	if (inlineInstance.nodeCompileTimeOutputs.contains(node)) {
+		return inlineInstance.nodeCompileTimeOutputs[node];
 	}
 	else {
 		std::vector<std::vector<ddtype>> inputspans;
 		for (int i = 0; i < node->getNumInputs(); i += 1) {
 			NodeData* input = node->getInput(i);
 			if (input) {
-				std::vector<ddtype> inputsOutput = findRemainingSizes(input, nodeCompileTimeOutputs, inlineInstance, outerInputs);
+				std::vector<ddtype> inputsOutput = findRemainingSizes(input, inlineInstance, outerInputs);
 				inputspans.push_back(inputsOutput);
 			}
 			else {
@@ -134,26 +137,80 @@ std::vector<ddtype> Runner::findRemainingSizes(NodeData* node, std::unordered_ma
 			}
 			
 		}
+		
 		for (int i = 0; i < inputspans.size(); i += 1) {
 			actualspans.emplace_back(inputspans[i]);
 		}
+		auto nodeType = node->getType();
 		int dim = node->getMaxOutputDimension(inputspans, inlineInstance, node->inputIndex);
 		node->setCompileTimeSize(&inlineInstance, dim);
-		
-		for (int i = 0; i < node->getCompileTimeSize(&inlineInstance); i += 1) {
+		for (int i = 0; i < dim; i += 1) {
 			tempOutput.push_back(0.0);
 		}
 		std::span tempOutSpan = std::span(tempOutput);
-		
-		
-		
-		node->getType()->execute(*node, user, actualspans, tempOutSpan, inlineInstance);
-		nodeCompileTimeOutputs.insert({ node, tempOutput });
 
+
+
+		node->getType()->execute(*node, user, actualspans, tempOutSpan, inlineInstance);
+		inlineInstance.nodeCompileTimeOutputs.insert({ node, tempOutput });
 		return tempOutput;
 	}
 }
 
+void storeCopies(RunnerInput& input,
+	SceneData* startScene,
+	NodeData*& editorOutput,
+	std::unordered_map<NodeData*, NodeData*>& remap)
+{
+		std::vector<NodeData*> sceneInputNodes;
+
+		// clone nodes
+		for (int i = 0; i < (int)startScene->nodeDatas.size(); i++) {
+			auto& n = *startScene->nodeDatas[i];
+			input.nodeCopies.push_back(std::make_unique<NodeData>(n)); // deep copy
+			NodeData* copyPtr = input.nodeCopies.back().get();
+			if (copyPtr) {
+				remap[&n] = copyPtr;
+				remap[copyPtr] = &n;
+
+				if (n.getType()->name == "output") {
+					if (!editorOutput) {
+						editorOutput = copyPtr; // safe, only if copy exists
+					}
+				}
+			}
+			
+		}
+
+
+	// cleanup / fix references
+	for (auto& nodeCopy : input.nodeCopies) {
+		if (!nodeCopy) continue;
+
+		// fix inputs
+		for (int i = 0; i < nodeCopy->getNumInputs(); i++) {
+			if (auto in = nodeCopy->getInput(i)) {
+				if (!in->isCopy) {
+					auto it = remap.find(in);
+					if (it != remap.end()) {
+						nodeCopy->detachInput(i, nullptr);
+						nodeCopy->attachInput(i, it->second, input, nullptr);
+					}
+				}
+			}
+		}
+
+		// fix outputs
+		for (const auto& [output, idx] : nodeCopy->outputs) {
+			if (output && !output->isCopy) {
+				auto it = remap.find(output);
+				if (it != remap.end()) {
+					it->second->attachInput(idx, nodeCopy.get(), input, nullptr);
+				}
+			}
+		}
+	}
+}
 
 
 void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const std::vector<std::span<ddtype>>& outerInputs)
@@ -167,36 +224,21 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 	input.field.clear();
 	if (!scene) { return; }
 	if (scene->nodes.empty()) { return; }
-	std::unordered_map<const NodeData*, NodeData*>& remap = input.remap;
-	const NodeData* editorOutput = nullptr;
+	std::unordered_map<NodeData*, NodeData*>& remap = input.remap;
+	NodeData* editorOutput = nullptr;
 
-	for (size_t i = 0; i < scene->nodes.size(); ++i) {
-		auto& n = scene->nodes[i];
-		input.nodeCopies.push_back(n->getNodeData()); // value copy (deep copy of maps etc.)
-		if (n->getType().name == "output") {
-			editorOutput = &n->getNodeDataConst();
-		}
-	}
+	storeCopies(input, scene, editorOutput, remap);
+	
 	// fallback if you truly use index 0 as output in your scene model:
-	if (!editorOutput) editorOutput = &input.nodeCopies[0];
-	for (size_t i = 0; i < scene->nodes.size(); ++i) {
-		remap[&scene->nodes[i]->getNodeData()] = &input.nodeCopies[i];
-		remap[&input.nodeCopies[i]] = &scene->nodes[i]->getNodeData();
-	}
-	input.outputNode = remap[editorOutput];
+	if (!editorOutput) editorOutput = input.nodeCopies[0].get();
+
+	input.outputNode = editorOutput;
 
 	for (auto& newNode : input.nodeCopies) {
-		newNode.markUncompiled(&input);
-		for (auto*& in : newNode.inputNodes) {
-			if (in) {
-				auto it = remap.find(in);
-				jassert(it != remap.end()); // should always exist
-				in = it->second;
-			}
-		}
+		newNode->markUncompiled(&input);
 	}
 	for (auto& node : input.nodeCopies) {
-		findRemainingSizes(&node, input.nodeCompileTimeOutputs, input, outerInputs);
+		findRemainingSizes(node.get(), input, outerInputs);
 	}
 	setupRecursive(input.outputNode, input);
 	for (auto& [node, ownership] : input.safeOwnership) {
@@ -204,7 +246,6 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 			auto [offset, size] = ownership;
 			input.nodeOwnership[node] = std::span<ddtype>(input.field.data() + offset, size);
 		}
-
 	}
 
 	UserInput fakeInput;
@@ -249,14 +290,12 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 	}
 
 	for (auto& node : input.nodeCopies) {
-		if (remap.contains(&node)) {
-			auto sceneNode = remap[&node];
+		if (remap.contains(node.get())) {
+			auto sceneNode = remap[node.get()];
 			if (sceneNode) {
-				sceneNode->setCompileTimeSize(&input, node.getCompileTimeSize(&input));
+				sceneNode->setCompileTimeSize(scene, node->getCompileTimeSize(&input));
 			}
 		}
-		
-		
 	}
 	input.nodesOrder = tempNodesOrder;
 	std::vector<ddtype> tempField;

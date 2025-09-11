@@ -6,7 +6,6 @@
 #include "Serializer.h"
 #include "NodeType.h"
 #include "SceneData.h"
-#include "NodeData.h"
 
 bool isValidType(const NodeType& type, const SceneData& scene) {
     // Implement your validation logic here
@@ -16,10 +15,11 @@ bool isValidType(const NodeType& type, const SceneData& scene) {
 bool validateSerializedScene(const std::string& json) {
     std::optional<NodeType> optType = Serializer::deserialize(json);
     if (!optType.has_value()) { return false; }
+    const NodeType& type = optType.value();
     const SceneData* fromScenePtr = type.fromScene;
     if (!fromScenePtr) { return false; }
 
-    const NodeType& type = optType.value();
+    
     const SceneData& fromScene = *fromScenePtr;
     
     return isValidType(type, fromScene);

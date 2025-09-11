@@ -146,64 +146,64 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     registry.clear();
 
     // ========= output =========
-    NodeType outputType(1);
-    outputType.name = "output";
-    outputType.address = "";
-    outputType.tooltip = "Pass-through: forwards its single input to the output.";
-    outputType.inputs = { InputFeatures("audio", InputType::decimal, 0, false) };
-    outputType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
-        {
-            for (int i = 0; i < static_cast<int>(inputs[0].size()); ++i) output[i] = inputs[0][i];
-        };
-    outputType.getOutputSize = outputSizeEqualsSingleInputSize;
-    outputType.buildUI = [](NodeComponent& n, NodeData& d) {
-        n.inputGUIElements.push_back(std::make_unique<juce::AudioVisualiserComponent>(1));
-        auto* v = dynamic_cast<juce::AudioVisualiserComponent*>(n.inputGUIElements.back().get());
-        v->setSamplesPerBlock(12);
-        n.addAndMakeVisible(v);
-        float scale = (float)std::pow(2.0, n.getOwningScene()->logScale);
-        const float sides = 20.0f * scale;
-        float cornerSize = 24.0f * scale;
-        if (!n.inputGUIElements.empty()) {
-            n.inputGUIElements.back()->setBounds(sides, cornerSize, n.getWidth() - sides - sides, n.getHeight() - cornerSize * 2);
-        }
-    };
-    outputType.onResized = [](NodeComponent& n) {
-        float scale = (float)std::pow(2.0, n.getOwningScene()->logScale);
-        const float sides = 20.0f * scale;
-        float cornerSize = 24.0f * scale;
-        if (!n.inputGUIElements.empty()) {
-            n.inputGUIElements.back()->setBounds(sides, cornerSize, n.getWidth() - sides - sides, n.getHeight() - cornerSize * 2);
-        }
-    };
-    outputType.outputType = InputType::decimal;
-    outputType.alwaysOutputsRuntimeData = false;
-    outputType.fromScene = nullptr;
-    registry.push_back(outputType);
+    {
+        NodeType outputType(1);
+        outputType.name = "output";
+        outputType.address = "";
+        outputType.tooltip = "Pass-through: forwards its single input to the output.";
+        outputType.inputs = { InputFeatures("audio", InputType::any, 0, false) };
+        outputType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
+            {
+                for (int i = 0; i < static_cast<int>(inputs[0].size()); ++i) output[i] = inputs[0][i];
+            };
+        outputType.getOutputSize = outputSizeEqualsSingleInputSize;
+        outputType.buildUI = [](NodeComponent& n, NodeData& d) {
+            n.inputGUIElements.push_back(std::make_unique<juce::AudioVisualiserComponent>(1));
+            auto* v = dynamic_cast<juce::AudioVisualiserComponent*>(n.inputGUIElements.back().get());
+            v->setSamplesPerBlock(12);
+            n.addAndMakeVisible(v);
+            float scale = (float)std::pow(2.0, n.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            float cornerSize = 24.0f * scale;
+            if (!n.inputGUIElements.empty()) {
+                n.inputGUIElements.back()->setBounds(sides, cornerSize, n.getWidth() - sides - sides, n.getHeight() - cornerSize * 2);
+            }
+            };
+        outputType.onResized = [](NodeComponent& n) {
+            float scale = (float)std::pow(2.0, n.getOwningScene()->logScale);
+            const float sides = 20.0f * scale;
+            float cornerSize = 24.0f * scale;
+            if (!n.inputGUIElements.empty()) {
+                n.inputGUIElements.back()->setBounds(sides, cornerSize, n.getWidth() - sides - sides, n.getHeight() - cornerSize * 2);
+            }
+            };
+        outputType.outputType = InputType::any;
+        outputType.alwaysOutputsRuntimeData = false;
+        outputType.fromScene = nullptr;
+        registry.push_back(outputType);
+    }
 
     // ========= input =========
     NodeType inputType(2);
     inputType.name = "input";
-    inputType.address = "inputs/";
+    inputType.address = "";
     inputType.tooltip = "Audio input placeholder (to be wired to a source).";
-    inputType.inputs = {};
+    inputType.inputs = { };// InputFeatures("", InputType::any, 0, false)};
     inputType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& i, std::span<ddtype> o, const RunnerInput& inlineInstance)
-    {
-        const size_t size = o.size();
-        double* oo = reinterpret_cast<double*>(o.data());
-        const double* ii = reinterpret_cast<const double*>(i[0].data());
-        if (!i.empty()) {
-            for (int x = 0; x < size; x += 1) {
-                oo[x] = ii[x];
+        {
+            const size_t size = o.size();
+            if (!i.empty()) {
+                for (int x = 0; x < size; x += 1) {
+                    o[x] = i[0][x];
+                }
             }
-        }
-        else {
-            for (int x = 0; x < size; x += 1) {
-                oo[x] = 0.0;
+            else {
+                for (int x = 0; x < size; x += 1) {
+                    o[x] = 0.0;
+                }
             }
-        }
-        
-    };
+
+        };
     inputType.isInputNode = true;
     inputType.getOutputSize = [](const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<ddtype>>& inputs, const RunnerInput& inlineInstance, int inputNum, const NodeData&) {
         auto* inlineComponent = dynamic_cast<const NodeComponent*>(&inlineInstance);
@@ -212,7 +212,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         }
 
         return 1;
-    };
+        };
     inputType.buildUI = [](NodeComponent& comp, NodeData& node)
         {
             node.setProperty("name", "input");
@@ -223,7 +223,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             back->onTextChange = [&node, &comp]()
                 {
                     auto el = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-                    node.setProperty("name", el->getText());
+                    node.setProperty("name", el->getText().toStdString());
                     comp.getOwningScene()->onSceneChanged();
                 };
 
@@ -247,18 +247,19 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
         back->applyFontToAllText(back->getFont().withHeight(14 * scale));
         };
-    inputType.outputType = InputType::decimal;
+    inputType.outputType = InputType::followsInput;
     inputType.alwaysOutputsRuntimeData = false;
     inputType.fromScene = nullptr;
     registry.push_back(inputType);
 
     // ========= boolean input =========
+    
     NodeType boolInputType(3);
     boolInputType.name = "boolean input";
     boolInputType.address = "inputs/";
     boolInputType.tooltip = "Boolean input placeholder (1.0 = true, 0.0 = false).";
     boolInputType.inputs = {};
-    inputType.isInputNode = true;
+    boolInputType.isInputNode = true;
     boolInputType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput& inlineInstance)
         {
             if (in.empty()) {
@@ -272,7 +273,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                 }
             }
         };
-    boolInputType.getOutputSize = inputType.getOutputSize; 
+    boolInputType.getOutputSize = inputType.getOutputSize;
     boolInputType.buildUI = [](NodeComponent& comp, NodeData& node)
         {
             node.setProperty("name", "input");
@@ -283,7 +284,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             back->onTextChange = [&node, &comp]()
                 {
                     auto el = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-                    node.setProperty("name", el->getText());
+                    node.setProperty("name", el->getText().toStdString());
                     comp.getOwningScene()->onSceneChanged();
                 };
 
@@ -310,89 +311,95 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     boolInputType.outputType = InputType::boolean;
     boolInputType.alwaysOutputsRuntimeData = false;
     boolInputType.fromScene = nullptr;
-    registry.push_back(boolInputType);
+    //registry.push_back(boolInputType);
 
     // ========= add =========
-    NodeType addType(4);
-    addType.name = "add";
-    addType.address = "math/arithmetic/";
-    addType.tooltip = "Component-wise addition; pads by copying the longer input.";
-    addType.inputs = { InputFeatures("x", InputType::decimal, 0, false), InputFeatures("y", InputType::decimal, 0, false) };
-    addType.getOutputSize = outputSizeComponentWise;
-    addType.buildUI = [](NodeComponent&, NodeData&) {};
-    addType.onResized = [](NodeComponent&) {};
-    addType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
-        {
-            const int a = static_cast<int>(inputs[0].size());
-            const int b = static_cast<int>(inputs[1].size());
-            const int n = std::min(a, b);
-            const int m = std::max(a, b);
-            const bool xIsBigger = a > b;
+    {
+        NodeType addType(4);
+        addType.name = "add";
+        addType.address = "math/arithmetic/";
+        addType.tooltip = "Component-wise addition; pads by copying the longer input.";
+        addType.inputs = { InputFeatures("x", InputType::decimal, 0, false), InputFeatures("y", InputType::decimal, 0, false) };
+        addType.getOutputSize = outputSizeComponentWise;
+        addType.buildUI = [](NodeComponent&, NodeData&) {};
+        addType.onResized = [](NodeComponent&) {};
+        addType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
+            {
+                const int a = static_cast<int>(inputs[0].size());
+                const int b = static_cast<int>(inputs[1].size());
+                const int n = std::min(a, b);
+                const int m = std::max(a, b);
+                const bool xIsBigger = a > b;
 
-            for (int i = 0; i < n; ++i) output[i].d = inputs[0][i].d + inputs[1][i].d;
-            if (xIsBigger) for (int i = n; i < m; ++i) output[i].d = inputs[0][i].d;
-            else           for (int i = n; i < m; ++i) output[i].d = inputs[1][i].d;
-        };
-    addType.outputType = InputType::decimal;
-    addType.alwaysOutputsRuntimeData = false;
-    addType.fromScene = nullptr;
-    registry.push_back(addType);
-    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("+").getTextDescription(), registry.size() - 1 });
+                for (int i = 0; i < n; ++i) output[i].d = inputs[0][i].d + inputs[1][i].d;
+                if (xIsBigger) for (int i = n; i < m; ++i) output[i].d = inputs[0][i].d;
+                else           for (int i = n; i < m; ++i) output[i].d = inputs[1][i].d;
+            };
+        addType.outputType = InputType::decimal;
+        addType.alwaysOutputsRuntimeData = false;
+        addType.fromScene = nullptr;
+        registry.push_back(addType);
+        keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("+").getTextDescription(), registry.size() - 1 });
+    }
 
 
     // ========= subtract =========
-    NodeType subType(5);
-    subType.name = "subtract";
-    subType.address = "math/arithmetic/";
-    subType.tooltip = "Component-wise x − y; pads with remaining of longer input (negated for y).";
-    subType.inputs = { InputFeatures("x", InputType::decimal, 0, false), InputFeatures("y", InputType::decimal, 0, false) };
-    subType.getOutputSize = outputSizeComponentWise;
-    subType.buildUI = [](NodeComponent&, NodeData&) {};
-    subType.onResized = [](NodeComponent&) {};
-    subType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
-        {
-            const int a = static_cast<int>(inputs[0].size());
-            const int b = static_cast<int>(inputs[1].size());
-            const int n = std::min(a, b);
-            const int m = std::max(a, b);
-            const bool xIsBigger = a > b;
+    {
+        NodeType subType(5);
+        subType.name = "subtract";
+        subType.address = "math/arithmetic/";
+        subType.tooltip = "Component-wise x − y; pads with remaining of longer input (negated for y).";
+        subType.inputs = { InputFeatures("x", InputType::decimal, 0, false), InputFeatures("y", InputType::decimal, 0, false) };
+        subType.getOutputSize = outputSizeComponentWise;
+        subType.buildUI = [](NodeComponent&, NodeData&) {};
+        subType.onResized = [](NodeComponent&) {};
+        subType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
+            {
+                const int a = static_cast<int>(inputs[0].size());
+                const int b = static_cast<int>(inputs[1].size());
+                const int n = std::min(a, b);
+                const int m = std::max(a, b);
+                const bool xIsBigger = a > b;
 
-            for (int i = 0; i < n; ++i) output[i] = inputs[0][i].d - inputs[1][i].d;
-            if (xIsBigger) for (int i = n; i < m; ++i) output[i] = inputs[0][i].d;
-            else           for (int i = n; i < m; ++i) output[i] = -inputs[1][i].d;
-        };
-    subType.outputType = InputType::decimal;
-    subType.alwaysOutputsRuntimeData = false;
-    subType.fromScene = nullptr;
-    registry.push_back(subType);
-    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("-").getTextDescription(), registry.size() - 1 });
+                for (int i = 0; i < n; ++i) output[i] = inputs[0][i].d - inputs[1][i].d;
+                if (xIsBigger) for (int i = n; i < m; ++i) output[i] = inputs[0][i].d;
+                else           for (int i = n; i < m; ++i) output[i] = -inputs[1][i].d;
+            };
+        subType.outputType = InputType::decimal;
+        subType.alwaysOutputsRuntimeData = false;
+        subType.fromScene = nullptr;
+        registry.push_back(subType);
+        keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("-").getTextDescription(), registry.size() - 1 });
+    }
 
     // ========= multiply =========
-    NodeType mulType(6);
-    mulType.name = "multiply";
-    mulType.address = "math/arithmetic/";
-    mulType.tooltip = "Component-wise multiplication; pads by copying the longer input.";
-    mulType.inputs = { InputFeatures("x", InputType::decimal, 0, false), InputFeatures("y", InputType::decimal, 0, false) };
-    mulType.getOutputSize = outputSizeComponentWise;
-    mulType.buildUI = [](NodeComponent&, NodeData&) {};
-    mulType.onResized = [](NodeComponent&) {};
-    mulType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
-        {
-            const int a = static_cast<int>(inputs[0].size());
-            const int b = static_cast<int>(inputs[1].size());
-            const int n = std::min(a, b);
-            const int m = std::max(a, b);
-            const bool xIsBigger = a > b;
+    {
+        NodeType mulType(6);
+        mulType.name = "multiply";
+        mulType.address = "math/arithmetic/";
+        mulType.tooltip = "Component-wise multiplication; pads by copying the longer input.";
+        mulType.inputs = { InputFeatures("x", InputType::decimal, 0, false), InputFeatures("y", InputType::decimal, 0, false) };
+        mulType.getOutputSize = outputSizeComponentWise;
+        mulType.buildUI = [](NodeComponent&, NodeData&) {};
+        mulType.onResized = [](NodeComponent&) {};
+        mulType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
+            {
+                const int a = static_cast<int>(inputs[0].size());
+                const int b = static_cast<int>(inputs[1].size());
+                const int n = std::min(a, b);
+                const int m = std::max(a, b);
+                const bool xIsBigger = a > b;
 
-            for (int i = 0; i < n; ++i) output[i] = inputs[0][i].d * inputs[1][i].d;
-            if (xIsBigger) for (int i = n; i < m; ++i) output[i] = inputs[0][i].d;
-            else           for (int i = n; i < m; ++i) output[i] = inputs[1][i].d;
-        };
-    mulType.outputType = InputType::decimal;
-    mulType.alwaysOutputsRuntimeData = false;
-    mulType.fromScene = nullptr;
-    registry.push_back(mulType);
-    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("*").getTextDescription(), registry.size() - 1 });
+                for (int i = 0; i < n; ++i) output[i] = inputs[0][i].d * inputs[1][i].d;
+                if (xIsBigger) for (int i = n; i < m; ++i) output[i] = inputs[0][i].d;
+                else           for (int i = n; i < m; ++i) output[i] = inputs[1][i].d;
+            };
+        mulType.outputType = InputType::decimal;
+        mulType.alwaysOutputsRuntimeData = false;
+        mulType.fromScene = nullptr;
+        registry.push_back(mulType);
+        keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("*").getTextDescription(), registry.size() - 1 });
+    }
 
     // ========= divide =========
     NodeType divType(7);
@@ -601,7 +608,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         {
             for (int i = 0; i < output.size(); i += 1) {
                 juce::String j = juce::String(i);
-                output[i] = node.getNumericProperty(j);
+                output[i] = node.getNumericProperty(j.toStdString());
             }
             
         };
@@ -636,7 +643,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                     tokens.removeEmptyStrings();                // drop blanks
 
                     int count = 0;
-                    node.setProperty(juce::String(0), 0.0);
+                    node.setProperty(juce::String(0).toStdString(), 0.0);
                     for (int i = 0; i < tokens.size(); ++i)
                     {
                         try
@@ -644,7 +651,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                             const double val = std::stod(tokens[i].toStdString());
                             if (std::isfinite(val))
                             {
-                                node.setProperty(juce::String(count++), val);
+                                node.setProperty(juce::String(count++).toStdString(), val);
                             }
                         }
                         catch (...) { /* skip bad tokens */ }
@@ -1331,7 +1338,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     getElemType.name = "get element";
     getElemType.address = "math/vector/ops/";
     getElemType.tooltip = "Reads element at index from a vector.";
-    getElemType.inputs = { InputFeatures("vector", InputType::decimal, 0, false), InputFeatures("index", InputType::integer, 1, false) };
+    getElemType.inputs = { InputFeatures("vector", InputType::any, 0, false), InputFeatures("index", InputType::integer, 1, false) };
     getElemType.getOutputSize = outputSize1Known;
     getElemType.buildUI = [](NodeComponent&, NodeData&) {};
     getElemType.onResized = [](NodeComponent&) {};
@@ -1340,9 +1347,9 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             if (inputs[0].empty() || inputs[1].empty()) { output[0] = 0.0; return; }
             const int64_t idx = inputs[1][0].i;
             if (idx < 0 || idx >= static_cast<int>(inputs[0].size())) { output[0] = 0.0; return; }
-            output[0] = inputs[0][idx].d;
+            output[0] = inputs[0][idx];
         };
-    getElemType.outputType = InputType::decimal;
+    getElemType.outputType = InputType::any;
     getElemType.alwaysOutputsRuntimeData = false;
     getElemType.fromScene = nullptr;
     registry.push_back(getElemType);
@@ -2851,7 +2858,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             back->onTextChange = [&node, &comp]()
                 {
                     auto el = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-                    node.setProperty("name", el->getText());
+                    node.setProperty("name", el->getText().toStdString());
                     comp.getOwningScene()->onSceneChanged();
                 };
 
@@ -2892,7 +2899,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             back->onTextChange = [&node, &comp]()
                 {
                     auto el = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-                    node.setProperty("name", el->getText());
+                    node.setProperty("name", el->getText().toStdString());
                     comp.getOwningScene()->onSceneChanged();
                 };
 
@@ -2949,7 +2956,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.outputType = InputType::integer;
         t.alwaysOutputsRuntimeData = false;
         t.fromScene = nullptr;
-        registry.push_back(t);
+        //registry.push_back(t);
     }
 
     {

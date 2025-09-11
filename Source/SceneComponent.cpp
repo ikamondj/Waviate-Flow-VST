@@ -3,20 +3,21 @@
 #include "NodeComponent.h"
 #include "DrawingUtils.h"
 
-SceneComponent::SceneComponent(WaviateFlow2025AudioProcessor& processor, const juce::String& name)
-    : processorRef(processor), customNodeType(processorRef.getCurrentLoadedTypeIndex())
+SceneComponent::SceneComponent(WaviateFlow2025AudioProcessor& processor, const std::string& name) : SceneData(name)
 {
-    customNodeType.setNodeId(processorRef.getCurrentLoadedUserIndex(), customNodeType.getNodeId());
+    processorRef = &processor;
+    customNodeType = NodeType(processorRef->getCurrentLoadedTypeIndex());
+    customNodeType.setNodeId(processorRef->getCurrentLoadedUserIndex(), customNodeType.getNodeId());
+    highlightedNode = nullptr;
+    nodes.reserve(2000);
     constructWithName(name);
 }
 
-SceneComponent::SceneComponent(WaviateFlow2025AudioProcessor& processor, const uint64_t fullId) : processorRef(processor), customNodeType(processorRef.getCurrentLoadedTypeIndex())
+SceneComponent::SceneComponent(WaviateFlow2025AudioProcessor& processor, const uint64_t userId, const uint64_t nodeId) : SceneData(userId, nodeId)
 {
-    customNodeType.setNodeId(processorRef.getCurrentLoadedUserIndex(), customNodeType.getNodeId());
-    juce::String json = getJsonFromFullID(fullId);
-    juce::String name = getNameFromJson(json);
-    initSceneWithJson(json);
-    constructWithName(name);
+    nodes.reserve(2000);
+    highlightedNode = nullptr;
+    processorRef = &processor;
 }
 
 struct MenuNode
@@ -35,15 +36,28 @@ SceneComponent::~SceneComponent()
 	drawReady = false;
 }
 
-void SceneComponent::constructWithName(const juce::String& name)
+void SceneComponent::onSceneChanged()
 {
+    
+    processorRef->initializeAllScenes();
+    computeAllNodeWildCards();
+    ensureNodeConnectionsCorrect(this);
+    processorRef->initializeRunner();
+
+    editNodeType();
+
+    repaint();
+}
+
+void SceneComponent::constructWithName(const std::string& name)
+{
+    SceneData::constructWithName(name);
     setName(name);
-    nodes.reserve(2000);
     addAndMakeVisible(deleteSceneButton);
     deleteSceneButton.onClick = [this]() {
-        processorRef.deleteScene(this);
+        processorRef->deleteScene(this);
         };
-    if (!processorRef.scenes.empty()) {
+    if (!processorRef->scenes.empty()) {
         sceneNameBox.setJustification(juce::Justification::centred);
         addAndMakeVisible(sceneNameBox);
         sceneNameBox.setText(name);
@@ -54,29 +68,19 @@ void SceneComponent::constructWithName(const juce::String& name)
     setWantsKeyboardFocus(true);
 }
 
-juce::String SceneComponent::getNameFromJson(const juce::String& json)
-{
-    return juce::String();
-}
 
-juce::String SceneComponent::getJsonFromFullID(const uint64_t fullId)
-{
-    return juce::String();
-}
 
-void SceneComponent::initSceneWithJson(const juce::String& json)
-{
-}
+
 
 void SceneComponent::mouseDown(const juce::MouseEvent& e)
 {
-    if (processorRef.getCurrentEditor()) {
-        processorRef.getCurrentEditor()->deselectBrowserItem();
+    if (processorRef->getCurrentEditor()) {
+        processorRef->getCurrentEditor()->deselectBrowserItem();
     }
     grabKeyboardFocus();
     
-    if (this != processorRef.activeScene) {
-        processorRef.activeScene = this;
+    if (this != processorRef->activeScene) {
+        processorRef->activeScene = this;
     }
     this->highlightedNode = nullptr;
     if (e.mods.isRightButtonDown())
@@ -151,11 +155,11 @@ void SceneComponent::mouseUp(const juce::MouseEvent& e)
             for (int inputIndex = 0; inputIndex < nodeData.getNumInputs(); ++inputIndex)
             {
                 NodeData* other = nodeData.getInput(inputIndex);
-                if (!other || !other->owningComponent) continue;
+                if (!other || !nodeToComponentMap.contains(other)) continue;
 
                 // Bezier endpoints in scene coords
                 juce::Point<float> end = target->getInputPinScenePos(inputIndex);
-                juce::Point<float> start = other->owningComponent->getOutputPinScenePos();
+                juce::Point<float> start = nodeToComponentMap.at(other)->getOutputPinScenePos();
 
                 float dx = std::max(40.0f, std::abs(end.x - start.x) / 2.0f);
                 juce::Point<float> c1(start.x + dx, start.y);
@@ -163,7 +167,7 @@ void SceneComponent::mouseUp(const juce::MouseEvent& e)
 
                 if (lineIntersectsBezier(dragLine, start, c1, c2, end))
                 {
-                    nodeData.detachInput(inputIndex);
+                    nodeData.detachInput(inputIndex, this);
                     // Matches your old behavior: detach only once per gesture
                     goto mouseUp_exitCutLoop;
                 }
@@ -219,14 +223,13 @@ void SceneComponent::mouseWheelMove(const juce::MouseEvent& event,
 
 void SceneComponent::showMenu(juce::Point<int> localPos, NodeData* toConnect, int index)
 {
-    showMenu(localPos, toConnect, index, [](const NodeType&) {
-        return true;
+    showMenu(localPos, toConnect, index, [this](const NodeType& t) {
+        return canPlaceType(t);
     });
 }
 
 void SceneComponent::showMenu(juce::Point<int> localPos, NodeData* toConnect, int index, std::function<bool(const NodeType&)> condition)
 {
-    bool isMainScene = (this == &processorRef.getScene());
     auto menu = buildNodeTypeMenuCache(condition);
     menu.showMenuAsync(
         juce::PopupMenu::Options(),
@@ -235,13 +238,13 @@ void SceneComponent::showMenu(juce::Point<int> localPos, NodeData* toConnect, in
             if (result > 0)
             {
                 int typeId = result;
-                if (typeId < processorRef.getRegistry().size()) {
-                    auto& type = processorRef.getRegistry()[typeId];
+                if (typeId < processorRef->getRegistry().size()) {
+                    auto& type = processorRef->getRegistry()[typeId];
                     addNode(type, localPos, toConnect, index);
                 }
                 else {
-                    typeId -= processorRef.getRegistry().size();
-                    auto& type = processorRef.getScenes()[typeId]->customNodeType;
+                    typeId -= processorRef->getRegistry().size();
+                    auto& type = processorRef->getScenes()[typeId]->customNodeType;
                     if (canPlaceType(type)) {
                         addNode(type, localPos, toConnect, index);
                     }
@@ -346,8 +349,7 @@ void SceneComponent::paint(juce::Graphics& g)
                 : (nc->getType().inputs[(size_t)fromInput].requiresCompileTimeKnowledge || nc->getNodeDataConst().needsCompileTimeInputs() ? juce::Colours::darkred : juce::Colours::black);
 
             juce::Colour inner = fromOutput
-                ? [&] { try { return nc->getNodeData().isSingleton(nullptr) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold; }
-            catch (...) { return juce::Colours::lawngreen.darker(.4f); } }()
+                ? [&] { return nc->getNodeData().compileTimeSizeReady(this) && nc->getNodeData().isSingleton(this) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold;  }()
                 : ((nc->getType().inputs[(size_t)fromInput].requiredSize == 1) ? juce::Colours::lawngreen.darker(.4f) : juce::Colours::gold);
 
             const float thickOuter = 12.f * (float)std::pow(2.0, logScale);
@@ -373,9 +375,9 @@ void SceneComponent::paint(juce::Graphics& g)
             for (int inputIndex = 0; inputIndex < numInputs; ++inputIndex)
             {
                 NodeData* other = nodeData.getInput(inputIndex);
-                if (!other || !other->owningComponent) continue;
+                if (!other || !nodeToComponentMap.contains(other)) continue;
 
-                NodeComponent* otherNode = other->owningComponent;
+                NodeComponent* otherNode = nodeToComponentMap.at(other);
 
                 juce::Point<float> end = pinNode->getInputPinScenePos(inputIndex);
                 juce::Point<float> start = otherNode->getOutputPinScenePos();
@@ -440,22 +442,22 @@ bool SceneComponent::canPlaceType(const NodeType& type)
     // Immediate self-cycle
     if (type.fromScene == this) return false;
 
-    std::queue<SceneComponent*> q;
-    std::unordered_set<SceneComponent*> visited;
+    std::queue<SceneData*> q;
+    std::unordered_set<SceneData*> visited;
 
     q.push(type.fromScene);
     visited.insert(type.fromScene);
 
     while (!q.empty())
     {
-        SceneComponent* sc = q.front();
+        SceneData* sc = q.front();
         q.pop();
 
         // Walk all node types used inside 'sc'
-        for (const std::unique_ptr<NodeComponent>& c : sc->nodes)
+        for (const NodeData* c : sc->nodeDatas)
         {
-            const NodeType& nt = c->getType();
-            SceneComponent* origin = nt.fromScene; // may be null for built-ins
+            const NodeType& nt = *c->getType();
+            SceneData* origin = nt.fromScene; // may be null for built-ins
             if (!origin) continue;
 
             // Found a path back to 'this' -> placing would create a cycle
@@ -470,74 +472,7 @@ bool SceneComponent::canPlaceType(const NodeType& type)
     return true;
 }
 
-void SceneComponent::editNodeType()
-{
 
-    customNodeType.name = getName();
-    customNodeType.address = "custom/";
-    customNodeType.buildUI = [](NodeComponent&, NodeData&) {};
-    std::vector<NodeData*> routineInputs;
-    customNodeType.inputs.clear();
-    std::vector<NodeComponent*> nodesFilteredByInputAndSorted;
-    for (const std::unique_ptr<class NodeComponent>& node : nodes) {
-        NodeData& data = node->getNodeData();
-        const NodeType* type = data.getType();
-        if (type->isInputNode) {
-            nodesFilteredByInputAndSorted.push_back(node.get());
-        }
-    }
-
-    std::sort(nodesFilteredByInputAndSorted.begin(),
-        nodesFilteredByInputAndSorted.end(),
-        [](NodeComponent* a, NodeComponent* b) {
-            return a->getPosition().y < b->getPosition().y;
-        });
-
-    
-    for (int inputIdx = 0; inputIdx < nodesFilteredByInputAndSorted.size(); inputIdx++) {
-        auto node = nodesFilteredByInputAndSorted[inputIdx];
-        NodeData& data = node->getNodeData();
-        juce::String inputName = data.getProperties().contains("name") ? data.getProperties().at("name") : "input";
-        bool requiresCompileTime = false;
-        node->getNodeData().inputIndex = inputIdx;
-        for (const std::unique_ptr<class NodeComponent>& downstream : nodes) {
-            auto downstreamData = downstream->getNodeDataConst();
-            for (int i = 0; i < downstreamData.getNumInputs(); i += 1) {
-                if (downstreamData.getInput(i) == &data && (downstreamData.getType()->inputs[i].requiresCompileTimeKnowledge || downstreamData.needsCompileTimeInputs())) {
-                    requiresCompileTime = true;
-                    goto exit_loop;
-                }
-            }
-        }
-    exit_loop:
-        int requiredSize = 0;
-        for (const auto& [downstream, index] : data.outputs) {
-            if (downstream) {
-                int sz = downstream->getType()->inputs[index].requiredSize;
-                if (sz > requiredSize) {
-                    requiredSize = sz;
-                }
-            }
-        }
-        InputFeatures features(inputName, data.getType()->outputType, requiredSize, requiresCompileTime);
-        features.optionalInputComponent = node;
-        customNodeType.inputs.push_back(features);
-    }
-    customNodeType.fromScene = this;
-
-    customNodeType.execute = [](const NodeData& node, UserInput& userInput, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance) {
-        NodeComponent* n = node.owningComponent;
-        Runner::run(n, userInput, inputs);
-    };
-    customNodeType.getOutputSize = [this](const std::vector<NodeData*>& inputs, const std::vector<std::vector<ddtype>>& d, const RunnerInput& n, int, const NodeData&) {
-        auto& outData = this->nodes[0]->getNodeDataConst();
-        std::vector<std::span<ddtype>> outerInputs;
-        for (auto v : d) {
-            outerInputs.push_back(std::span<ddtype>(v.data(), v.size()));
-        }
-        return outData.getCompileTimeSize(&n);
-    };
-}
 
 NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos)
 {
@@ -552,21 +487,24 @@ NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> lo
     nodes.push_back(std::make_unique<NodeComponent>(NodeData(type), type, *this));
     auto nodePtr = nodes.back().get();
     type.buildUI(*nodePtr, nodePtr->getNodeData());
-    nodePtr->getNodeData().owningComponent = nodePtr;
+	nodeDatas.push_back(&nodePtr->getNodeData());
+    nodePtr->getNodeData().setPosition(localPos);
+	nodeToComponentMap.insert_or_assign(&nodePtr->getNodeData(), nodePtr);
     nodePtr->setTopLeftPosition(localPos);
     
     addAndMakeVisible(nodePtr);
 
-
     onSceneChanged();
+    
     if (toConnect) {
         if (index >= 0) {
-            toConnect->attachInput(index, &nodePtr->getNodeData(), *this);
+            toConnect->attachInput(index, &nodePtr->getNodeData(), *this, this);
         }
         else {
-            nodePtr->getNodeData().attachInput(0, toConnect, *this);
+            nodePtr->getNodeData().attachInput(0, toConnect, *this, this);
         }
     }
+    onSceneChanged();
 	return *nodePtr;
 }
 
@@ -578,31 +516,39 @@ void SceneComponent::deleteNode(NodeComponent* node)
 	auto it = std::find_if(nodes.begin(), nodes.end(),
 		[node](const std::unique_ptr<NodeComponent>& n) { return n.get() == node; });
 
+    auto nt = std::find_if(nodeDatas.begin(), nodeDatas.end(),
+        [node](NodeData* n) { return n == &node->getNodeDataConst(); });
+
+
+
     for (const std::unique_ptr<NodeComponent>& other : nodes) {
         auto& type = other->getType();
         if (other.get() != node) {
             for (const auto& [c, i] : other->getNodeDataConst().outputs) {
 				if (c && c == &node->getNodeDataConst()) {
-					node->getNodeData().detachInput(i);
+					node->getNodeData().detachInput(i, this);
 				}
             }
             for (int i = 0; i < type.inputs.size(); ++i) {
                 auto input = other->getNodeDataConst().getInput(i);
                 if (input && input == &node->getNodeDataConst()) {
-                    other->getNodeData().detachInput(i);
+                    other->getNodeData().detachInput(i, this);
                 }
             }
         }
 
     }
+
+    if (nt != nodeDatas.end()) {
+        nodeDatas.erase(nt);
+    }
+
 	if (it != nodes.end())
 	{
 		nodes.erase(it);
 	}
 
     auto& nodeType = node->getType();
-
-    
 
 	// Remove the node component from the scene
 	removeChildComponent(node);
@@ -620,7 +566,7 @@ void SceneComponent::ensureNodeConnectionsCorrect(RunnerInput* r) {
                 if (auto other = data.getInput(i)) {
                     if (requiredSize != 0 && other->getCompileTimeSize(r) != requiredSize) {
                         if (i < data.inputNodes.size()) {
-                            data.detachInput(i);
+                            data.detachInput(i, this);
                         }
                         hasBadConnections = true;
                     }
@@ -633,50 +579,9 @@ void SceneComponent::ensureNodeConnectionsCorrect(RunnerInput* r) {
     }
 }
 
-void SceneComponent::computeAllNodeWildCards() {
-    for (auto& nc : nodes) {
-        nc->getNodeData().markWildCardTypesDirty();
-    }
 
-    bool anyDirty;
-    do {
-        anyDirty = false;
-        int resolvedThisPass = 0;
 
-        for (auto& nc : nodes) {
-            auto& d = nc->getNodeData();
-            if (d.getTrueType() == InputType::dirty) {
-                std::unordered_set<NodeData*> visited;
-                bool clean = d.computeWildCardTypes(false, visited);
-                anyDirty |= !clean;
-                if (clean) ++resolvedThisPass;
-            }
-        }
 
-        if (anyDirty && resolvedThisPass == 0) {
-            // Stalemate: collapse remaining wildcards to ANY
-            for (auto& nc : nodes) {
-                auto& d = nc->getNodeData();
-                if (d.getTrueType() == InputType::dirty) {
-                    d.setTrueType(InputType::any);
-                }
-            }
-            anyDirty = false;
-        }
-    } while (anyDirty);
-}
-
-void SceneComponent::onSceneChanged()
-{
-    Runner::initialize(*this, this, std::vector<std::span<ddtype>>());
-    computeAllNodeWildCards();
-    ensureNodeConnectionsCorrect(this);
-    processorRef.initializeRunner();
-    
-    editNodeType();
-
-    repaint();
-}
 
 
 
@@ -715,7 +620,7 @@ juce::PopupMenu SceneComponent::buildNodeTypeMenuCache(std::function<bool(const 
 
     // Build tree structure
     size_t i;
-    auto& registry = processorRef.getRegistry();
+    auto& registry = processorRef->getRegistry();
     for (i = 0; i < registry.size(); ++i)
     {
         if (registry[i].name.toLowerCase() == "output" || !condition(registry[i])) // skip output node
@@ -724,9 +629,9 @@ juce::PopupMenu SceneComponent::buildNodeTypeMenuCache(std::function<bool(const 
         }
         insertNode(root, registry[i], static_cast<int>(i));
     }
-    for (int j = 0, i = registry.size(); j < processorRef.getScenes().size(); j += 1, i += 1) {
-        auto& scene = processorRef.getScenes()[j];
-        if (scene.get() != &processorRef.getScene() && condition(scene->customNodeType)) {
+    for (int j = 0, i = registry.size(); j < processorRef->getScenes().size(); j += 1, i += 1) {
+        auto& scene = processorRef->getScenes()[j];
+        if (condition(scene->customNodeType)) {
             insertNode(root, scene->customNodeType, i);
         }
     }

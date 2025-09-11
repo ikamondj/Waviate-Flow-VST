@@ -362,7 +362,7 @@ void WaviateFlow2025AudioProcessor::addNodeOfType(int typeId, juce::Point<int> l
 
 void WaviateFlow2025AudioProcessor::addScene(const juce::String& name)
 {
-    scenes.push_back(std::move(std::make_unique<SceneComponent>(*this, name)));
+    scenes.push_back(std::make_unique<SceneComponent>(*this, name.toStdString()));
     auto scene = scenes.back().get();
     auto editor = getCurrentEditor();
     if (editor) {
@@ -470,5 +470,12 @@ uint64_t WaviateFlow2025AudioProcessor::getCurrentLoadedUserIndex()
         throw std::out_of_range("Too many loaded Node Types!");
     }
     return currentLoadedUserIndex;
+}
+
+void WaviateFlow2025AudioProcessor::initializeAllScenes()
+{
+    for (auto& scene : scenes) {
+        Runner::initialize(*scene, scene.get(), std::vector<std::span<ddtype>>());
+    }
 }
 
