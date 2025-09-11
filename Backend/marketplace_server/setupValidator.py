@@ -12,7 +12,7 @@ ext_modules = [
             "../Source",  # Add other include dirs as needed
         ],
         language="c++",
-        extra_compile_args=["-std=c++17"],
+        extra_compile_args=["-std=c++20"],
     ),
 ]
 

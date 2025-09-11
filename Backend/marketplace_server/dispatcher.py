@@ -57,6 +57,8 @@ FUNCTIONS = {
     "adminRemoveEntry": admin.admin_remove_entry,
     "adminBanUser": admin.admin_ban_user,
     "adminStats": admin.admin_stats,
+    "adminSetupDailyRandom": admin.admin_setup_daily_random,
+    "adminSetupDailyHottest": admin.admin_setup_daily_hottest,
 }
 
 # --- Central policy (coarse-grained) ---------------------------------------
