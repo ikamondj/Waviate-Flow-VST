@@ -18,7 +18,7 @@ WaviateFlow2025AudioProcessor::WaviateFlow2025AudioProcessor()
                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)
 		               .withInput("Side Chain", juce::AudioChannelSet::stereo(), false)
-                       )
+                       ), dawMananger(*this)
 #endif
 {
     userInput.numFramesStartOfBlock = 0;

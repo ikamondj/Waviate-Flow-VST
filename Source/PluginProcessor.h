@@ -14,6 +14,7 @@
 #include "Runner.h"
 #include "UserData.h"
 #include "RunnerInput.h"
+#include "DawManager.h"
 //==============================================================================
 /**
 */
@@ -94,6 +95,7 @@ public:
     uint16_t getCurrentLoadedTypeIndex();
     uint64_t getCurrentLoadedUserIndex();
     void initializeAllScenes();
+    DawManager dawManager;
 
 private:
     std::mutex mutex;
