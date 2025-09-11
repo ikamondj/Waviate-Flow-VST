@@ -1,0 +1,24 @@
+name: Trigger Random Daily Admin Function
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 0 * * *'  # Uncomment to run every 24 hours at midnight UTC
+
+jobs:
+  trigger-random-daily:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call random daily admin endpoint (fire-and-forget)
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_SERVICE_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --max-time 10 \
+            --data '{}' \
+            --output /dev/null \
+            --silent \
+            --show-error \
+            --fail \
+            https://your-api-url.example.com/admin/random-daily || true
+        # The '|| true' ensures the workflow does not fail if the endpoint is slow or returns an error
