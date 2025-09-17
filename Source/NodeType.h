@@ -1,8 +1,8 @@
 #pragma once
+#include <JuceHeader.h>
 #include <functional>
 #include <string>
 #include <vector>
-#include <JuceHeader.h>
 #include <span>
 #include "NodeData.h"
 #include "InputType.h"
@@ -27,15 +27,6 @@ struct InputFeatures {
     ddtype defaultValue = 0.0;
 };
 
-class orableBool {
-    bool value = false;
-public:
-    void setTrue() { value = true; };
-	void returnToFalseException() { value = false; };
-    //convert to bool implicitly:
-	operator bool() const { return value; }
-};
-
 struct NodeType {
     juce::String name;
     juce::String address;
@@ -46,7 +37,9 @@ struct NodeType {
     std::function<void(class NodeComponent&, NodeData&)> buildUI;
     std::function<int(const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<ddtype>>& inputs, const class RunnerInput& inlineInstance, int inputNum, const NodeData& self)> getOutputSize;
     std::function<void(NodeComponent&)> onResized = [](NodeComponent&) {};
-    bool isSingleton(const NodeData* node, const std::vector<std::span<ddtype>>& inputs) const;
+    /* returns true if the change in state should update the compiled state */
+    std::function<bool(NodeComponent&)> _nodeDataChanged = [](NodeComponent&) { return false; }; // define this to be how the state gets modified. capture UI changes in the lambda cap to make the proper change
+    void nodeDataChanged(NodeComponent& n) const; // call this function whenever UI changes the node's internal state. such as web audio got downloaded and cached in the node
     InputType outputType = InputType::decimal;
     bool alwaysOutputsRuntimeData = false;
     class SceneData* fromScene = nullptr;

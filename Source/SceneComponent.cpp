@@ -487,6 +487,7 @@ NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> lo
     nodes.push_back(std::make_unique<NodeComponent>(NodeData(type), type, *this));
     auto nodePtr = nodes.back().get();
     type.buildUI(*nodePtr, nodePtr->getNodeData());
+    type.onResized(*nodePtr);
 	nodeDatas.push_back(&nodePtr->getNodeData());
     nodePtr->getNodeData().setPosition(localPos);
 	nodeToComponentMap.insert_or_assign(&nodePtr->getNodeData(), nodePtr);

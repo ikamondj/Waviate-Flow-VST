@@ -1,6 +1,10 @@
 #include "ScenePropertiesComponent.h"
 #include "SceneComponent.h"
 
+ScenePropertiesComponent::ScenePropertiesComponent(WaviateFlow2025AudioProcessor& pcessor) : processor(pcessor)
+{
+}
+
 void ScenePropertiesComponent::setActiveScene(SceneComponent* scene) {
     activeSceneData = scene;
     if (activeSceneData) {
@@ -14,6 +18,8 @@ void ScenePropertiesComponent::setActiveScene(SceneComponent* scene) {
     else {
         nameEditor.setText("", juce::dontSendNotification);
         addressEditor.setText("", juce::dontSendNotification);
+        nameEditor.setEnabled(false);
+        addressEditor.setEnabled(false);
         publishToMarketplaceButton.setEnabled(false);
     }
 }

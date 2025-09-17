@@ -14,6 +14,6 @@
 
 class RestApiHandler {
 public:
-    static std::string get(const std::string& url, const std::map<std::string, std::string>& headers = {});
-    static std::string post(const std::string& url, const std::string& body, const std::map<std::string, std::string>& headers = {});
+    static std::string get(const std::string& url, const std::map<std::string, std::string>& headers = {}, int retryCount = 1);
+    static std::string post(const std::string& url, const std::string& body, const std::map<std::string, std::string>& headers = {}, int retryCount = 1);
 };

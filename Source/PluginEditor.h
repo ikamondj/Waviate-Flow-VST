@@ -46,7 +46,9 @@ public:
     void deselectBrowserItem();
     void timerCallback() override;
     WaviateFlow2025AudioProcessor& audioProcessor;
+    juce::ThreadPool& getThreadPool();
 private:
+    juce::ThreadPool pool{ 4 }; // 4 worker threads, adjust as needed
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WaviateFlow2025AudioProcessorEditor)
 
 public:

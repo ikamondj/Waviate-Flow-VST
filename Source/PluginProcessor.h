@@ -18,6 +18,9 @@
 //==============================================================================
 /**
 */
+
+#define nBufferSize 4
+
 class WaviateFlow2025AudioProcessor  : public juce::AudioProcessor
 {
 public:
@@ -77,20 +80,23 @@ public:
     UserInput userInput;
     std::array<double, 128> noteHzOfficialValues;
     void initializeRegistry();
-    void setAudibleScene(SceneComponent* scene);
+    void setAudibleScene(class SceneData* scene);
     void setActiveScene(SceneComponent* scene);
+    SceneComponent* getActiveScene();
     double maxOutBeforeDistortion = 10.0;
     static WaviateFlow2025AudioProcessor* GetActiveInstance();
-    std::deque<std::unique_ptr<RunnerInput>> runners;
+    //std::deque<std::unique_ptr<RunnerInput>> runners;
+    std::array<RunnerInput, nBufferSize> runners;
+    std::atomic_int runnerIndex;
+    const RunnerInput* getCurrentRunner() const noexcept;
+    const RunnerInput* getPreviousRunner() const noexcept;
     
-    const RunnerInput* getCurrentRunner() noexcept;
-    const RunnerInput* getPreviousRunner() noexcept;
     void swapToNextRunner();
     static constexpr double fadeWindowSeconds = 0.020;
     static constexpr int bufferSize = 96000;
     std::array<float, bufferSize> ring;
     juce::AbstractFifo fifo{ bufferSize };
-    class SceneComponent* getAudibleScene();
+    class SceneData* getAudibleScene();
     std::optional<UserData> currentLogin;
     uint16_t getCurrentLoadedTypeIndex();
     uint64_t getCurrentLoadedUserIndex();
@@ -98,10 +104,9 @@ public:
     DawManager dawManager;
 
 private:
-    std::mutex mutex;
     uint16_t currentLoadedTypeIndex = 0;
     uint64_t currentLoadedUserIndex = 1;
-    class SceneComponent* audibleScene;
+    class SceneData* audibleScene;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WaviateFlow2025AudioProcessor)
 };
