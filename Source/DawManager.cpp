@@ -64,3 +64,51 @@ int64_t DawManager::getNumSamplesSinceStartOfTrack() {
     }
     return 0;
 }
+
+bool DawManager::isPlaying() {
+    if (auto* playHead = processor.getPlayHead()) {
+        juce::AudioPlayHead::CurrentPositionInfo posInfo;
+        if (playHead->getCurrentPosition(posInfo)) {
+            return posInfo.isPlaying;
+        }
+    }
+    return false;
+}
+
+bool DawManager::isRecording() {
+    if (auto* playHead = processor.getPlayHead()) {
+        juce::AudioPlayHead::CurrentPositionInfo posInfo;
+        if (playHead->getCurrentPosition(posInfo)) {
+            return posInfo.isRecording;
+        }
+    }
+    return false;
+}
+
+bool DawManager::isLooping() {
+    if (auto* playHead = processor.getPlayHead()) {
+        juce::AudioPlayHead::CurrentPositionInfo posInfo;
+        if (playHead->getCurrentPosition(posInfo)) {
+            return posInfo.isLooping;
+        }
+    }
+    return false;
+}
+
+bool DawManager::isMetronomeEnabled() {
+    if (auto* playHead = processor.getPlayHead()) {
+        juce::AudioPlayHead::CurrentPositionInfo posInfo;
+        if (playHead->getCurrentPosition(posInfo)) {
+            return posInfo.isMetronomeEnabled;
+        }
+    }
+    return false;
+}
+
+const juce::Array< juce::AudioProcessorParameter * > & DawManager::getParameters() {
+    return processor.getParameters();
+}
+
+bool DawManager::isRealtime() {
+    return !processor.isNonRealtime();
+}

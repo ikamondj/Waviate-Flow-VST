@@ -1,7 +1,7 @@
-
 import os
 import numpy as np
-from db import fetch_all, execute_query
+from db import fetch_all, execute_query, get_db
+from entity.daily_random import DailyRandom
 
 # Centralized Auth Helpers
 def get_admin_token():
@@ -13,9 +13,6 @@ def check_access_token(access_token: str):
     expected = get_admin_token()
     if not expected or access_token != expected:
         raise PermissionError("Unauthorized: Invalid access token.")
-
-
-
 
 def admin_list_users(access_token: str):
     check_access_token(access_token)
@@ -73,14 +70,13 @@ def generate_random_daily_entries(entry_ids, k):
     return result.reshape((num_minutes, k))
 
 def update_random_daily_table(random_entries):
-    execute_query("TRUNCATE TABLE random_daily")
+    db = next(get_db())
+    db.query(DailyRandom).delete()  # Truncate
     for minute, ids in enumerate(random_entries):
         # Store as comma-separated pairs: "nodeId1:userId1,nodeId2:userId2,..."
         entry_str = ','.join(f"{int(e['nodeId'])}:{int(e['userId'])}" for e in ids)
-        execute_query(
-            "INSERT INTO random_daily (minute, entry_ids) VALUES (:minute, :entry_ids)",
-            {"minute": minute, "entry_ids": entry_str}
-        )
+        db.add(DailyRandom(minute=minute, entry_ids=entry_str))
+    db.commit()
 
 def admin_setup_daily_random(access_token: str):
     check_access_token(access_token)

@@ -18,7 +18,7 @@ jobs:
         uses: microsoft/setup-msbuild@v2
 
       - name: Build Visual Studio Solution
-        run: msbuild Builds/VisualStudio2022/YourProject.sln /p:Configuration=Release
+        run: msbuild Builds/VisualStudio2022/WaviateFlow2025.sln /p:Configuration=Release
 
       - name: Create MSI Installer (WiX Toolset)
         run: |

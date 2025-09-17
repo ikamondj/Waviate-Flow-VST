@@ -24,6 +24,8 @@ def update_entry( data: dict = None):
         return {"error": "Missing OAuth token", "code": 401}
     if "entryId" not in data.keys():
         return {"error": "Missing entryId", "code": 400}
+    if not sceneValidator.validate_scene_json(data["json"]):
+        return {"error": "Invalid scene JSON", "code": 500}
 
     return {"message": "not implemented"}
 
