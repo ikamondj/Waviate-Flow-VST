@@ -165,6 +165,8 @@
     <ClCompile Include="..\..\Source\DawManager.cpp"/>
     <ClCompile Include="..\..\Source\DrawingUtils.cpp"/>
     <ClCompile Include="..\..\Source\NodeComponent.cpp"/>
+    <ClCompile Include="..\..\Source\NodePropertiesComponent.cpp"/>
+    <ClCompile Include="..\..\Source\PropertiesMenu.cpp"/>
     <ClCompile Include="..\..\Source\SceneComponent.cpp"/>
     <ClCompile Include="..\..\Source\SceneExplorerComponent.cpp"/>
     <ClCompile Include="..\..\Source\ScenePropertiesComponent.cpp"/>
@@ -2596,6 +2598,8 @@
     <ClInclude Include="..\..\Source\DawManager.h"/>
     <ClInclude Include="..\..\Source\DrawingUtils.h"/>
     <ClInclude Include="..\..\Source\NodeComponent.h"/>
+    <ClInclude Include="..\..\Source\NodePropertiesComponent.h"/>
+    <ClInclude Include="..\..\Source\PropertiesMenu.h"/>
     <ClInclude Include="..\..\Source\SceneComponent.h"/>
     <ClInclude Include="..\..\Source\SceneExplorerComponent.h"/>
     <ClInclude Include="..\..\Source\ScenePropertiesComponent.h"/>

@@ -70,6 +70,14 @@
         <FILE id="trtlD0" name="NodeComponent.cpp" compile="1" resource="0"
               file="Source/NodeComponent.cpp"/>
         <FILE id="mFuHFJ" name="NodeComponent.h" compile="0" resource="0" file="Source/NodeComponent.h"/>
+        <FILE id="XNuxCL" name="NodePropertiesComponent.cpp" compile="1" resource="0"
+              file="Source/NodePropertiesComponent.cpp"/>
+        <FILE id="ilLdMm" name="NodePropertiesComponent.h" compile="0" resource="0"
+              file="Source/NodePropertiesComponent.h"/>
+        <FILE id="CfesQc" name="PropertiesMenu.cpp" compile="1" resource="0"
+              file="Source/PropertiesMenu.cpp"/>
+        <FILE id="JxmVEx" name="PropertiesMenu.h" compile="0" resource="0"
+              file="Source/PropertiesMenu.h"/>
         <FILE id="TRYB07" name="SceneComponent.cpp" compile="1" resource="0"
               file="Source/SceneComponent.cpp"/>
         <FILE id="Gnqabq" name="SceneComponent.h" compile="0" resource="0"

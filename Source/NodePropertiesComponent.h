@@ -1,9 +1,10 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "PropertiesMenu.h"
 class NodeComponent;
 
-class NodePropertiesComponent : public juce::Component
+class NodePropertiesComponent : public PropertiesMenu
 {
 public:
     NodePropertiesComponent();

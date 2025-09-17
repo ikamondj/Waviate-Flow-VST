@@ -703,6 +703,12 @@
     <ClCompile Include="..\..\Source\NodeComponent.cpp">
       <Filter>WaviateFlow2025\Source\GUI</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\NodePropertiesComponent.cpp">
+      <Filter>WaviateFlow2025\Source\GUI</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\PropertiesMenu.cpp">
+      <Filter>WaviateFlow2025\Source\GUI</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\SceneComponent.cpp">
       <Filter>WaviateFlow2025\Source\GUI</Filter>
     </ClCompile>
@@ -3361,6 +3367,12 @@
       <Filter>WaviateFlow2025\Source\GUI</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\NodeComponent.h">
+      <Filter>WaviateFlow2025\Source\GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\NodePropertiesComponent.h">
+      <Filter>WaviateFlow2025\Source\GUI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\PropertiesMenu.h">
       <Filter>WaviateFlow2025\Source\GUI</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\SceneComponent.h">
