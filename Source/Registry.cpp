@@ -2775,7 +2775,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     // ========= white noise
     {
         NodeType t(106);
-        t.name = "bernoulli noise"; t.address = "math/noise/random/"; t.tooltip = "Generates (t/f) n times";
+        t.name = "bernoulli noise"; t.address = "math/noise/random/"; t.tooltip = "Generates (t/f) n times at random";
         t.inputs = { InputFeatures("n", InputType::integer, 1, true) };
         t.inputs[0].defaultValue.i = 1;
         t.buildUI = [](NodeComponent& nc, NodeData& nd) {}; t.getOutputSize = outputSizeFromInputScalar(0);

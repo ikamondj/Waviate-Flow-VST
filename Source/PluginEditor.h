@@ -13,6 +13,8 @@
 #include "NodeType.h"
 #include "NodeComponent.h"
 #include "SceneComponent.h"
+#include "NodePropertiesComponent.h"
+#include "SceneExplorerComponent.h"
 #include "ScenePropertiesComponent.h"
 #include "NodeData.h"
 #include "BrowserModel.h"
@@ -41,13 +43,20 @@ public:
     juce::Component canvas;
     juce::StretchableLayoutManager horizontalLayout;
     juce::StretchableLayoutResizerBar resizerBar;
-    ScenePropertiesComponent scenePropertiesComponent;
+    
+    std::vector<class PropertyMenu*> propertiesMenus;
+    void setActivePropertyMenu(int index);
+    void setActivePropertyMenu(const PropertyMenu* propMenu);
     
     void deselectBrowserItem();
     void timerCallback() override;
     WaviateFlow2025AudioProcessor& audioProcessor;
     juce::ThreadPool& getThreadPool();
 private:
+    ScenePropertiesComponent scenePropertiesComponent;
+    NodePropertiesComponent nodePropertiesComponent;
+    SceneExplorerComponent sceneExplorerComponent;
+    int activePropertyMenu = -1;
     juce::ThreadPool pool{ 4 }; // 4 worker threads, adjust as needed
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WaviateFlow2025AudioProcessorEditor)
 
