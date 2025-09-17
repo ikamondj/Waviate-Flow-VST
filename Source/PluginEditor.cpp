@@ -105,7 +105,15 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
         canvas.addAndMakeVisible(scene.get());
     }
     
-    
+    propertiesMenus.push_back(scenePropertiesComponent);
+    propertiesMenus.push_back(nodePropertiesComponent);
+    propertiesMenus.push_back(sceneExplorerComponent);
+
+    for (auto* p : propertiesMenus) {
+        if (p) {
+            addChildComponent(p);
+        }
+    }
     
     setSize(800, 600);
     startTimerHz(60);
@@ -205,6 +213,26 @@ void WaviateFlow2025AudioProcessorEditor::buttonClicked(juce::Button*)
 
 
 
+
+void WaviateFlow2025AudioProcessorEditor::setActivePropertyMenu(int index)
+{
+    activePropertyMenu = index;
+    for (int i = 0; i < propertiesMenus.size(); i += 1) {
+        auto* menu = propertiesMenus[i];
+        if (menu) { menu->setVisible(index == i); }
+    }
+
+}
+
+void WaviateFlow2025AudioProcessorEditor::setActivePropertyMenu(const PropertyMenu* propMenu)
+{
+    for (int i = 0; i < propertiesMenus.size(); i += 1) {
+        PropertyMenu* p = propertiesMenus[i];
+        if (p == propMenu) {
+            return setActivePropertyMenu(i);
+        }
+    }
+}
 
 void WaviateFlow2025AudioProcessorEditor::deselectBrowserItem()
 {
