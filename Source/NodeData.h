@@ -62,6 +62,7 @@ public:
     void setCompileTimeSize(const RunnerInput* inlineInstance, int s);
     void markUncompiled(const RunnerInput* inlineInstance);
     std::vector<NodeData*> inputNodes;
+    std::vector<ddtype> optionalStoredAudio;
     std::set<std::tuple<NodeData*, int>> outputs;
     enum class InputType getTrueType() const;
     void markWildCardTypesDirty();

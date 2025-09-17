@@ -24,6 +24,9 @@ public:
 	class SceneComponent* getOwningScene() const;
     const NodeType& getType() const;
     void resized() override;
+    uint64_t bumpVersion();
+
+    uint64_t currentVersion() const;
 	std::vector<std::unique_ptr<juce::Component>> inputGUIElements;
     class WaviateFlow2025AudioProcessor& getProcessorRef();
     // public accessors the Scene can query (mimic old Pin API)
@@ -46,6 +49,7 @@ private:
     int  pinDragInputIndex = -1;        // valid only when pinDragFromOutput == false
     juce::Point<float> pinDragStartScenePos;
     juce::Point<float> pinDragCurrentScenePos;
+    std::atomic<uint64_t> version{ 0 };
     
     NodeData node;
     

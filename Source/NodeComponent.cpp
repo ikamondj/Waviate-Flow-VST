@@ -250,7 +250,6 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
             }
             else {
                 // INPUT tooltip
-                orableBool unknown; // matches your existing API patterns
                 auto* inputNode = getNodeData().getInput(overInput);
                 const int inputSize = inputNode ? inputNode->getCompileTimeSize(scene) : 1;
                 const int require = getNodeDataConst().getType()->inputs[overInput].requiredSize;
@@ -545,6 +544,14 @@ const NodeType& NodeComponent::getType() const
 void NodeComponent::resized()
 {
     getType().onResized(*this);
+}
+
+uint64_t NodeComponent::bumpVersion() {
+    return ++version; // atomic pre-increment, returns new version
+}
+
+uint64_t NodeComponent::currentVersion() const {
+    return version.load(std::memory_order_acquire);
 }
 
 WaviateFlow2025AudioProcessor& NodeComponent::getProcessorRef()

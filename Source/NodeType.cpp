@@ -13,12 +13,63 @@
 #include "UserInput.h"
 #include "PluginProcessor.h"
 #include "SceneComponent.h"
+#include "PluginEditor.h"
 
 
 std::unordered_map<uint64_t, const NodeType*> typeLookup;
 
 InputFeatures::InputFeatures(const juce::String& n, InputType itype, int requiredSize, bool reqCompileTime)
     : name(n), requiredSize(requiredSize), requiresCompileTimeKnowledge(reqCompileTime), inputType(itype) {
+}
+
+void operateNodeDataChange(const NodeType& t, NodeComponent& n) {
+    if (t._nodeDataChanged(n))
+    {
+        if (auto scene = n.getOwningScene()) {
+            scene->onSceneChanged();
+        }
+    }
+}
+
+void NodeType::nodeDataChanged(NodeComponent& n) const { //call from UI changes of the node's internal state
+    auto jobVersion = n.bumpVersion();
+    auto scene = n.getOwningScene();
+    if (!scene) {
+        operateNodeDataChange(*this, n);
+    }
+    else {
+        auto processor = scene->processorRef;
+        if (!processor) {
+            operateNodeDataChange(*this, n);
+        }
+        else {
+            auto editor = processor->getCurrentEditor();
+            if (!editor) {
+                operateNodeDataChange(*this, n);
+            }
+            else {
+                auto weakComp = juce::Component::SafePointer(&n);
+                editor->getThreadPool().addJob([&]() 
+                {
+                    // background thread
+                    if (_nodeDataChanged(*weakComp))
+                    {
+                        // schedule back on GUI thread
+                        juce::MessageManager::callAsync([weakComp, jobVersion]()
+                            {
+                                if (weakComp != nullptr && weakComp->currentVersion() == jobVersion)
+                                {
+                                    if (auto* scene = weakComp->getOwningScene())
+                                        scene->onSceneChanged();
+                                }
+                            });
+                    }
+                }); 
+            }
+        }
+    }
+
+    
 }
 
 uint64_t NodeType::getNodeUserID() const

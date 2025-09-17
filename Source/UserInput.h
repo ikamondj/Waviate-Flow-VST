@@ -22,6 +22,8 @@ public:
 	std::array<double, 128> controllerValues;
     std::array<double, 128> noteHz;
     std::array<double, 128> noteCycle;
+    std::array<int, 128> midiCCValues;
+    std::array<double, 128> dawParams;
     double pitchWheelValue;
     double modWheelValue;
     int64_t numFramesStartOfBlock;
@@ -32,6 +34,14 @@ public:
     double sideChainL;
     double sideChainR;
     bool isStereoRight;
+    bool isRealTime;
+    bool isPlaying;
+    bool isLooping;
+    bool isRecording;
+    bool isMetronomeGoing;
+    int timeSigTop;
+    int timeSigBottom;
+    double BPM;
 	CircleBuffer leftInputHistory;
     CircleBuffer rightInputHistory;
     double getHistoricalSample(int samplesAgo) const;

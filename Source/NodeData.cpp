@@ -38,6 +38,7 @@ NodeData::NodeData(const NodeData& other) : NodeData(other.type) {
 	compileTimeSize = other.compileTimeSize;
 	inputIndex = other.inputIndex;
 	trueType = other.trueType;
+    optionalStoredAudio = other.optionalStoredAudio;
 	isCopy = true;
 }
 
@@ -249,28 +250,28 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r, SceneDat
     if (inputNodes.size() < type.inputs.size())
         inputNodes.resize(type.inputs.size(), nullptr);
 
-    if (typeMismatch) {
-        NodeType& typeToAdd = NodeType::getConversionType(from, to);
-	    auto thisPos = this->getPosition();
-	    auto otherPos = other->getPosition();
-	    auto avgPos = (thisPos + otherPos) / 2;
-
-        if (ref) {
-            NodeComponent& nc = ref->addNode(typeToAdd, avgPos);
-            NodeData& nd = nc.getNodeData();
-            inputNodes[idx] = &nd;
-            auto t = std::tuple<NodeData*, int>(this, idx);
-            if (!other->outputs.contains(t)) {
-                other->outputs.insert(t);
-            }
-            nd.inputNodes.push_back(other);
-            auto t2 = std::tuple<NodeData*, int>(&nd, 0);
-            if (!other->outputs.contains(t2)) {
-                other->outputs.insert(t2);
-            }
-        }
-    }
-    else {
+    //if (typeMismatch) {
+    //    NodeType& typeToAdd = NodeType::getConversionType(from, to);
+	//    auto thisPos = this->getPosition();
+	//    auto otherPos = other->getPosition();
+	//    auto avgPos = (thisPos + otherPos) / 2;
+    //
+    //    if (ref) {
+    //        NodeComponent& nc = ref->addNode(typeToAdd, avgPos);
+    //        NodeData& nd = nc.getNodeData();
+    //        inputNodes[idx] = &nd;
+    //        auto t = std::tuple<NodeData*, int>(this, idx);
+    //        if (!other->outputs.contains(t)) {
+    //            other->outputs.insert(t);
+    //        }
+    //        nd.inputNodes.push_back(other);
+    //        auto t2 = std::tuple<NodeData*, int>(&nd, 0);
+    //        if (!other->outputs.contains(t2)) {
+    //            other->outputs.insert(t2);
+    //        }
+    //    }
+    //}
+    //else {
         inputNodes[idx] = other;
         if (other) {
             auto t = std::tuple<NodeData*, int>(this, idx);
@@ -278,7 +279,7 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r, SceneDat
                 other->outputs.insert(t);
             }
         }
-    }
+    //}
 
     if (ref) {
         ref->onSceneChanged();

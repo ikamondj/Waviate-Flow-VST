@@ -27,7 +27,7 @@ public:
 
     
     
-    static void initialize(RunnerInput& input, class SceneComponent* scene, const std::vector<std::span<ddtype>>& outerInputs);
+    static void initialize(RunnerInput& input, class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs);
 
 private:
 };

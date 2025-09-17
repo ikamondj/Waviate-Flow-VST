@@ -32,6 +32,8 @@ public:
 	const std::string& getSceneName() const;
 	void setSceneName(const std::string& newName);
     bool isLocalOnly;
+    bool isMarketplaceContent();
+    bool isLocalEditable();
 private:
     std::string sceneName;
     SceneData();

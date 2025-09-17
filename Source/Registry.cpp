@@ -11,8 +11,10 @@
 #include "PluginEditor.h"
 #include "NodeType.h"
 #include "RunnerInput.h"
+#include "AudioReader.h"
 #include "Noise.h"
 #include "ddtype.h"
+#include "VisualVectorCreator.h"
 #define MAX_UNKNOWN_SIZE 1024
 
 NodeType* intToBoolType = nullptr;
@@ -45,10 +47,25 @@ int outputSizeComponentWise(const std::vector<NodeData*>& inputs, const std::vec
     return size;
 }
 
+void fillInnerBounds(NodeComponent& n, juce::Component* c, double leftRatio, double rightRatio) {
+    float scale = (float)std::pow(2.0, n.getOwningScene()->logScale);
+    const float sides = 20.0f * scale;
+    float cornerSize = 24.0f * scale;
+    double l = std::lerp(sides, n.getWidth() - sides, leftRatio);
+    n.inputGUIElements.back()->setBounds(l, cornerSize, rightRatio * (n.getWidth() - sides) - l, n.getHeight() - cornerSize * 2);
+}
+
 std::function<int(const std::vector<NodeData*>&, const std::vector<std::vector<ddtype>>& s, const RunnerInput& r, int, const NodeData&)> outputSizeFromInputScalar(int whichInput) {
     return [whichInput](const std::vector<NodeData*>&, const std::vector<std::vector<ddtype>>& s, const RunnerInput&, int, const NodeData&)
     {
         return std::max(1, static_cast<int>(std::round(s[whichInput][0].i)));
+    };
+}
+
+std::function<int(const std::vector<NodeData*>&, const std::vector<std::vector<ddtype>>& s, const RunnerInput& r, int, const NodeData&)> outputSizeByNamedProperty(const std::string& name) {
+    return [name](const std::vector<NodeData*>&, const std::vector<std::vector<ddtype>>& s, const RunnerInput& r, int, const NodeData& nd) {
+        if (!nd.getNumericProperties().contains(name)) { return 1; }
+        return (int)nd.getNumericProperty(name);
     };
 }
 
@@ -252,66 +269,149 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     inputType.fromScene = nullptr;
     registry.push_back(inputType);
 
-    // ========= boolean input =========
-    
-    NodeType boolInputType(3);
-    boolInputType.name = "boolean input";
-    boolInputType.address = "inputs/";
-    boolInputType.tooltip = "Boolean input placeholder (1.0 = true, 0.0 = false).";
-    boolInputType.inputs = {};
-    boolInputType.isInputNode = true;
-    boolInputType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput& inlineInstance)
-        {
-            if (in.empty()) {
-                for (int i = 0; i < out.size(); i += 1) {
-                    out[i] = 0.0;
-                }
-            }
-            else {
-                for (int i = 0; i < out.size(); i += 1) {
-                    out[i] = in[0][i];
-                }
-            }
-        };
-    boolInputType.getOutputSize = inputType.getOutputSize;
-    boolInputType.buildUI = [](NodeComponent& comp, NodeData& node)
-        {
-            node.setProperty("name", "input");
-            comp.inputGUIElements.push_back(std::make_unique<juce::TextEditor>("name"));
-            auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-            back->setJustification(juce::Justification::horizontallyCentred);
-            back->setText("input");
-            back->onTextChange = [&node, &comp]()
+    // ========= audio file =========
+    {
+        NodeType audioFileInputType(3);
+        audioFileInputType.name = "audio file";
+        audioFileInputType.address = "audio/media/";
+        audioFileInputType.tooltip = "Reads a local audio file into a vector";
+        audioFileInputType.inputs = {};
+        audioFileInputType.isInputNode = false;
+
+        // Output size is based on cached audio (or 1 if invalid)
+        audioFileInputType.getOutputSize = [](const std::vector<NodeData*>& inputs, const std::vector<std::vector<ddtype>>&, const RunnerInput&, int, const NodeData& node) -> int
+            {
+                return node.optionalStoredAudio.empty()
+                    ? 1
+                    : static_cast<int>(node.optionalStoredAudio.size());
+            };
+
+        // Execution: copy from cache, or emit a single 0
+        audioFileInputType.execute = [](const NodeData& node,
+            UserInput&,
+            const std::vector<std::span<ddtype>>&,
+            std::span<ddtype> out,
+            const RunnerInput&)
+            {
+                if (node.optionalStoredAudio.empty())
                 {
-                    auto el = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
-                    node.setProperty("name", el->getText().toStdString());
-                    comp.getOwningScene()->onSceneChanged();
-                };
+                    if (!out.empty())
+                        out[0] = 0.0;
+                    return;
+                }
 
-            const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
-            const float sides = 20.0f * scale;
-            const float cornerSize = 24.0f * scale;
-            back->setMultiLine(false, false);
-            back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
-            back->applyFontToAllText(back->getFont().withHeight(14 * scale));
-            comp.addAndMakeVisible(back);
-        };
-    boolInputType.onResized = [](NodeComponent& comp) {
-        if (comp.inputGUIElements.empty()) return;
-        auto back = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+                const size_t n = std::min(out.size(), node.optionalStoredAudio.size());
+                std::copy_n(node.optionalStoredAudio.begin(), n, out.begin());
+            };
 
-        if (!back) return;
-        const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
-        const float sides = 20.0f * scale;
-        const float cornerSize = 24.0f * scale;
-        back->setMultiLine(false, false);
-        back->setBounds(sides, cornerSize, comp.getWidth() - sides - sides, comp.getHeight() - cornerSize * 2);
-        back->applyFontToAllText(back->getFont().withHeight(14 * scale));
-        };
-    boolInputType.outputType = InputType::boolean;
-    boolInputType.alwaysOutputsRuntimeData = false;
-    boolInputType.fromScene = nullptr;
-    //registry.push_back(boolInputType);
+        audioFileInputType._nodeDataChanged = [](NodeComponent& comp) -> bool
+            {
+                auto& node = comp.getNodeData();
+                if (!node.getProperties().contains("filepath"))
+                    return false;
+
+                const std::string path = node.getStringProperty("filepath");
+                std::shared_ptr<std::vector<ddtype>> newAudio = std::make_shared<std::vector<ddtype>>();
+
+                std::thread([&]()
+                    {
+                        // Blocking I/O off the GUI thread
+                        if (!AudioReader::readAudioFile(path, *newAudio))
+                            newAudio->clear();
+
+                        // GUI update when done
+                        juce::MessageManager::callAsync([newAudio, &node, &comp, path]()
+                            {
+                                node.optionalStoredAudio = std::move(*newAudio);
+
+                                // Update label colour/text
+                                for (auto* c : comp.getChildren())
+                                    if (auto* lbl = dynamic_cast<juce::Label*>(c))
+                                    {
+                                        const bool valid = !node.optionalStoredAudio.empty();
+                                        lbl->setColour(juce::Label::textColourId,
+                                            valid ? juce::Colours::green : juce::Colours::red);
+                                        juce::String text = valid ? juce::File(path).getFileName() : "No file selected";
+                                        lbl->setTooltip(path);
+                                        lbl->setText(text, juce::dontSendNotification);
+                                    }
+
+                                if (auto* s = comp.getOwningScene())
+                                    s->onSceneChanged();
+
+                                comp.repaint();
+                            });
+
+                    }).detach();
+
+                return false; // actual "change detection" is handled async
+            };
+
+        audioFileInputType.buildUI = [](NodeComponent& comp, NodeData& node)
+            {
+                comp.inputGUIElements.push_back(std::make_unique<juce::TextButton>("Choose audio…"));
+                auto* chooseBtn = dynamic_cast<juce::TextButton*>(comp.inputGUIElements.back().get());
+                comp.addAndMakeVisible(chooseBtn);
+
+                comp.inputGUIElements.push_back(std::make_unique<juce::Label>("audioPath", "No file selected"));
+                auto* statusLabel = dynamic_cast<juce::Label*>(comp.inputGUIElements.back().get());
+                statusLabel->setJustificationType(juce::Justification::centred);
+                statusLabel->setInterceptsMouseClicks(false, false);
+                comp.addAndMakeVisible(statusLabel);
+
+                chooseBtn->onClick = [&comp, &node]()
+                    {
+                        auto chooser = std::make_shared<juce::FileChooser>(
+                            "Select an audio file...",
+                            juce::File(),
+                            "*.wav;*.aiff;*.aif;*.flac;*.ogg;*.mp3");
+
+                        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                            [chooser, &comp, &node](const juce::FileChooser& fc)
+                            {
+                                juce::File file = fc.getResult();
+                                if (file.existsAsFile())
+                                {
+                                    node.setProperty("filepath", file.getFullPathName().toStdString());
+                                    node.getType()->nodeDataChanged(comp); // triggers async decode
+                                }
+                            });
+                    };
+            };
+
+        audioFileInputType.onResized = [](NodeComponent& comp)
+            {
+                // Find our controls
+                juce::TextButton* chooseBtn = nullptr;
+                juce::Label* statusLabel = nullptr;
+
+                for (auto* c : comp.getChildren())
+                {
+                    if (!chooseBtn)   chooseBtn = dynamic_cast<juce::TextButton*>(c);
+                    if (!statusLabel) statusLabel = dynamic_cast<juce::Label*>(c);
+                }
+
+                const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+                const int padding = (int)(12.0f * scale);
+                const int btnH = (int)(28.0f * scale);
+                const int lblH = (int)(22.0f * scale);
+
+                if (chooseBtn)
+                    chooseBtn->setBounds(padding, padding,
+                        comp.getWidth() - 2 * padding, btnH);
+
+                if (statusLabel)
+                    statusLabel->setBounds(padding, padding + btnH + (int)(8.0f * scale),
+                        comp.getWidth() - 2 * padding, lblH);
+            };
+
+        audioFileInputType.outputType = InputType::decimal;
+        audioFileInputType.alwaysOutputsRuntimeData = true; // outputs actual audio data at run time
+        audioFileInputType.fromScene = nullptr;
+
+        registry.push_back(audioFileInputType);
+    }
+
 
     // ========= add =========
     {
@@ -1153,27 +1253,53 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("i").getTextDescription(), registry.size() - 1 });
 
 
-    // ======== MIDI ========
-    NodeType noteOnType(31);
-    noteOnType.name = "note on";
-    noteOnType.address = "audio/midi/";
-    noteOnType.tooltip = "True if a given MIDI note (0,...,127) is currently on.";
-    noteOnType.inputs = { InputFeatures("note ID", InputType::integer, 0, false) };
-    noteOnType.getOutputSize = outputSizeEqualsSingleInputSize;
-    noteOnType.buildUI = [](NodeComponent&, NodeData&) {};
-    noteOnType.onResized = [](NodeComponent&) {};
-    noteOnType.execute = [](const NodeData&, UserInput& userInput, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
-        {
-            for (int i = 0; i < static_cast<int>(inputs[0].size()); ++i) {
-                const int note = inputs[0][i].i;
-                output[i] = (note >= 0 && note < 128) ? userInput.notesOn[note] : 0.0;
+    {
+        NodeType t(31);
+        t.name = "custom data";
+        t.address = "audio/";
+        t.tooltip = "";
+        t.inputs = { };
+        t.getOutputSize = outputSizeByNamedProperty("size");
+        t.buildUI = [](NodeComponent& comp, NodeData&) {
+            comp.inputGUIElements.push_back(std::make_unique<VisualVectorCreator>(comp));
+            auto* visBox = dynamic_cast<VisualVectorCreator*>(comp.inputGUIElements.back().get());
+            fillInnerBounds(comp, visBox, 0.0, 1.0);
+            comp.addAndMakeVisible(visBox);
+            };
+        t.onResized = [](NodeComponent& comp) {
+            if (!comp.inputGUIElements.empty()) {
+                auto* visBox = dynamic_cast<VisualVectorCreator*>(comp.inputGUIElements.back().get());
+                fillInnerBounds(comp, visBox, 0.0, 1.0);
             }
-        };
-    noteOnType.outputType = InputType::boolean;
-    noteOnType.alwaysOutputsRuntimeData = true;
-    noteOnType.fromScene = nullptr;
-    registry.push_back(noteOnType);
-    keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("alt n").getTextDescription(), registry.size() - 1 });
+            };
+        t.execute = [](const NodeData& nd, UserInput&, const std::vector<std::span<ddtype>>& inputs,
+            std::span<ddtype> output, const RunnerInput& inlineInstance)
+            {
+                const auto& src = nd.optionalStoredAudio;
+                const int srcSize = static_cast<int>(src.size());
+                const int dstSize = static_cast<int>(output.size());
+
+                if (srcSize == 0 || dstSize == 0) {
+                    for (int i = 0; i < dstSize; i++) output[i].d = 0.0;
+                    return;
+                }
+
+                for (int i = 0; i < dstSize; i++) {
+                    double virtualIndex = static_cast<double>(i) / dstSize;
+                    double srcPos = virtualIndex * srcSize;
+                    int j = i;
+                    if (j < 0) j = 0;
+                    if (j >= srcSize) j = srcSize - 1;
+                    output[i].d = src[j].d;
+
+                }
+            };
+        t.outputType = InputType::decimal;
+        t.alwaysOutputsRuntimeData = false;
+        t.fromScene = nullptr;
+        registry.push_back(t);
+        boolToIntType = &registry.back();
+    }
 
     NodeType velocity(32);
     velocity.name = "velocity";
@@ -1216,7 +1342,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("p").getTextDescription(), registry.size() - 1 });
 
     NodeType allNotesType(34);
-    allNotesType.name = "all note states";
+    allNotesType.name = "note on";
     allNotesType.address = "audio/midi/";
     allNotesType.tooltip = "Vector of 128 booleans for all MIDI notes.";
     allNotesType.inputs = {};
@@ -1356,7 +1482,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     keyCodeTypeMapping.insert({ juce::KeyPress::createFromDescription("alt e").getTextDescription(), registry.size() - 1 });
 
     NodeType sliceElemType(41);
-   sliceElemType.name = "vector slice";
+   sliceElemType.name = "vector lookup";
    sliceElemType.address = "math/vector/ops/";
    sliceElemType.tooltip = "Reads elements at all indices from a vector.";
    sliceElemType.inputs = { InputFeatures("vector", InputType::decimal, 0, false), InputFeatures("indices", InputType::integer, 0, false) };
@@ -2418,11 +2544,15 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.getOutputSize = [](const std::vector<NodeData*>& nodes, const std::vector<std::vector<ddtype>>& s, const RunnerInput& ri, int, const NodeData&) {
             int as = (nodes.size() > 0 && s[0].size());
             int bs = (nodes.size() > 1 && s[1].size());
-            return as + bs;
-            };
+            int tot = as + bs;
+            return tot > 1 ? tot : 2;
+        };
         t.buildUI = [](NodeComponent&, NodeData&) {}; t.onResized = [](NodeComponent&) {};
         t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput&) {
-            const auto& a = in[0], & b = in[1]; int idx = 0; for (ddtype v : a) out[idx++] = v; for (ddtype v : b) out[idx++] = v;
+            const auto& a = in[0], & b = in[1]; 
+            int idx = -1; 
+            for (ddtype v : a) out[++idx] = v; 
+            for (ddtype v : b) out[++idx] = v;
             };
 		t.whichInputToFollowWildcard = 0;
         t.outputType = InputType::followsInput; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
@@ -2921,7 +3051,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     {
         // ========= decimal to bool =========
         NodeType t(119);
-        t.name = "dec to bool";
+        t.name = "";
         t.address = "math/convert/";
         t.tooltip = "Converts decimal vectors to boolean vectors: ";
         t.inputs = { InputFeatures("x", InputType::decimal, 0, false) };
@@ -2940,29 +3070,139 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         decToBoolType = &registry.back();
     }
 
+    // ========= web audio =========
     {
-        // ========= boolean input =========
-        NodeType t(120);
-        t.name = "integer input";
-        t.address = "inputs/";
-        t.tooltip = "input placeholder for whole numbers (... -2, -1, 0, 1, 2, ...)";
-        t.inputs = {};
-        t.isInputNode = true;
-        t.execute = boolInputType.execute;
-        t.getOutputSize = inputType.getOutputSize;
-        t.buildUI = inputType.buildUI;
-        t.onResized = inputType.onResized;
-        
-        t.outputType = InputType::integer;
-        t.alwaysOutputsRuntimeData = false;
-        t.fromScene = nullptr;
-        //registry.push_back(t);
+        NodeType webAudioInputType(120);
+        webAudioInputType.name = "web audio";
+        webAudioInputType.address = "audio/media/";
+        webAudioInputType.tooltip = "Reads a web-hosted audio file into a vector";
+        webAudioInputType.inputs = {};
+        webAudioInputType.isInputNode = false;
+
+        // Output size is based on cached audio (or 1 if invalid)
+        webAudioInputType.getOutputSize = [](const std::vector<NodeData*>&,
+            const std::vector<std::vector<ddtype>>&,
+            const RunnerInput&,
+            int,
+            const NodeData& node) -> int
+            {
+                return node.optionalStoredAudio.empty()
+                    ? 1
+                    : static_cast<int>(node.optionalStoredAudio.size());
+            };
+
+        // Execution: copy from cache, or emit a single 0
+        webAudioInputType.execute = [](const NodeData& node,
+            UserInput&,
+            const std::vector<std::span<ddtype>>&,
+            std::span<ddtype> out,
+            const RunnerInput&)
+            {
+                if (node.optionalStoredAudio.empty())
+                {
+                    if (!out.empty())
+                        out[0] = 0.0;
+                    return;
+                }
+
+                const size_t n = std::min(out.size(), node.optionalStoredAudio.size());
+                std::copy_n(node.optionalStoredAudio.begin(), n, out.begin());
+            };
+
+        webAudioInputType._nodeDataChanged = [](NodeComponent& comp) -> bool
+            {
+                auto& node = comp.getNodeData();
+
+                if (!node.getProperties().contains("url"))
+                {
+                    node.optionalStoredAudio.clear();
+                    return true; // scene should update (empty now)
+                }
+
+                const std::string url = node.getStringProperty("url");
+                if (url.empty())
+                {
+                    node.optionalStoredAudio.clear();
+                    return true;
+                }
+
+                // This runs synchronously (but on a background thread thanks to nodeDataChanged)
+                if (!AudioReader::readWebAudio(url, node.optionalStoredAudio))
+                    node.optionalStoredAudio.clear();
+
+                // Indicate scene needs an update
+                return true;
+            };
+
+        webAudioInputType.buildUI = [](NodeComponent& comp, NodeData& node)
+            {
+                comp.inputGUIElements.push_back(std::make_unique<juce::TextEditor>("urlBox"));
+                auto* urlBox = dynamic_cast<juce::TextEditor*>(comp.inputGUIElements.back().get());
+                urlBox->setText(node.getStringProperty("url")); // restore if re-open
+                urlBox->setJustification(juce::Justification::centred);
+                fillInnerBounds(comp, urlBox, 0.0, 0.5);
+                urlBox->applyFontToAllText(urlBox->getFont().withHeight(14));
+                comp.addAndMakeVisible(urlBox);
+
+                comp.inputGUIElements.push_back(std::make_unique<juce::Label>("status", ""));
+                auto* statusLabel = dynamic_cast<juce::Label*>(comp.inputGUIElements.back().get());
+                statusLabel->setJustificationType(juce::Justification::centred);
+                fillInnerBounds(comp, statusLabel, 0.5, 1.0);
+                statusLabel->setInterceptsMouseClicks(false, false);
+                comp.addAndMakeVisible(statusLabel);
+
+                // Initial status update
+                juce::String url = node.getStringProperty("url");
+                statusLabel->setText(url.isEmpty() ? "No URL set" : url, juce::dontSendNotification);
+                statusLabel->setColour(juce::Label::textColourId,
+                    node.optionalStoredAudio.empty() ? juce::Colours::red : juce::Colours::green);
+
+                // On text change → update property + trigger async load
+                urlBox->onTextChange = [urlBox, &comp, &node]()
+                    {
+                        const juce::String url = urlBox->getText();
+                        node.setProperty("url", url.toStdString());
+                        comp.getType().nodeDataChanged(comp); // triggers async fetch/decode
+                    };
+            };
+
+        webAudioInputType.onResized = [](NodeComponent& comp)
+            {
+                juce::TextEditor* urlBox = nullptr;
+                juce::Label* statusLabel = nullptr;
+
+                for (auto* c : comp.getChildren())
+                {
+                    if (!urlBox)      urlBox = dynamic_cast<juce::TextEditor*>(c);
+                    if (!statusLabel) statusLabel = dynamic_cast<juce::Label*>(c);
+                }
+
+                const float scale = (float)std::pow(2.0, comp.getOwningScene()->logScale);
+                const int padding = (int)(12.0f * scale);
+                const int boxH = (int)(24.0f * scale);
+                const int lblH = (int)(20.0f * scale);
+
+                if (urlBox)
+                    urlBox->setBounds(padding, padding,
+                        comp.getWidth() - 2 * padding, boxH);
+
+                if (statusLabel)
+                    statusLabel->setBounds(padding, padding + boxH + (int)(6.0f * scale),
+                        comp.getWidth() - 2 * padding, lblH);
+            };
+
+        webAudioInputType.outputType = InputType::decimal;
+        webAudioInputType.alwaysOutputsRuntimeData = true; // outputs actual audio samples
+        webAudioInputType.fromScene = nullptr;
+
+        registry.push_back(webAudioInputType);
     }
+
 
     {
         // ========= decimal to int =========
         NodeType t(121);
-        t.name = "dec to int";
+        t.name = "";
         t.address = "math/convert/";
         t.tooltip = "Converts decimal vectors to integer vectors: ";
         t.inputs = { InputFeatures("x", InputType::decimal, 0, false) };
@@ -2983,7 +3223,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     {
         // ========= int to bool =========
         NodeType t(122);
-        t.name = "int to bool";
+        t.name = "";
         t.address = "math/convert/";
         t.tooltip = "Converts integer vectors to boolean vectors: ";
         t.inputs = { InputFeatures("x", InputType::decimal, 0, false) };
@@ -3004,7 +3244,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     {
         // ========= int to dec =========
         NodeType t(123);
-        t.name = "int to dec";
+        t.name = "";
         t.address = "math/convert/";
         t.tooltip = "Converts integer vectors to decimal vectors: ";
         t.inputs = { InputFeatures("x", InputType::decimal, 0, false) };
@@ -3025,7 +3265,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     {
         // ========= int to bool =========
         NodeType t(124);
-        t.name = "bool to dec";
+        t.name = "";
         t.address = "math/convert/";
         t.tooltip = "Converts bool vectors to decimal vectors: ";
         t.inputs = { InputFeatures("x", InputType::decimal, 0, false) };
@@ -3046,7 +3286,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     {
         // ========= int to bool =========
         NodeType t(125);
-        t.name = "bool to int";
+        t.name = "";
         t.address = "math/convert/";
         t.tooltip = "Converts decimal vectors to boolean vectors: ";
         t.inputs = { InputFeatures("x", InputType::decimal, 0, false) };
@@ -3063,6 +3303,257 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         registry.push_back(t);
         boolToIntType = &registry.back();
     }
+
+    {
+        NodeType t(126);
+        t.name = "custom curve";
+        t.address = "audio/";
+        t.tooltip = "";
+        t.inputs = { InputFeatures("x", InputType::decimal, 0, false )};
+        t.getOutputSize = outputSizeByInputPin(0);
+        t.buildUI = [](NodeComponent& comp, NodeData&) {
+            comp.inputGUIElements.push_back(std::make_unique<VisualVectorCreator>(comp));
+            auto* visBox = dynamic_cast<VisualVectorCreator*>(comp.inputGUIElements.back().get());
+            fillInnerBounds(comp, visBox, 0.0, 1.0);
+            comp.addAndMakeVisible(visBox);
+        };
+        t.onResized = [](NodeComponent& comp) {
+            if (!comp.inputGUIElements.empty()) {
+                auto* visBox = dynamic_cast<VisualVectorCreator*>(comp.inputGUIElements.back().get());
+                fillInnerBounds(comp, visBox, 0.0, 1.0);
+            }
+        };
+        t.execute = [](const NodeData& nd, UserInput&, const std::vector<std::span<ddtype>>& inputs,
+            std::span<ddtype> output, const RunnerInput& inlineInstance)
+            {
+                const auto& uvs = inputs[0];
+                const auto& vec = nd.optionalStoredAudio;
+                int n = static_cast<int>(vec.size());
+                if (n == 0) {
+                    for (int i = 0; i < output.size(); i++) output[i] = 0.0;
+                    return;
+                }
+
+                for (int i = 0; i < uvs.size(); i++) {
+                    double uv = uvs[i].d;
+
+                    // wrap uv into [0,1)
+                    uv = uv - std::floor(uv);
+
+                    // map into [0, n-1]
+                    double scaledIdx = uv * (n - 1);
+
+                    int lower = static_cast<int>(std::floor(scaledIdx));
+                    int upper = static_cast<int>(std::ceil(scaledIdx));
+                    double frac = scaledIdx - lower;
+
+                    // wrap indices
+                    lower = (lower % n + n) % n;
+                    upper = (upper % n + n) % n;
+
+                    double v0 = vec[lower].d;
+                    double v1 = vec[upper].d;
+                    output[i] = v0 + frac * (v1 - v0);
+                }
+            };
+        t.outputType = InputType::decimal;
+        t.alwaysOutputsRuntimeData = false;
+        t.fromScene = nullptr;
+        registry.push_back(t);
+    }
+    {
+        NodeType vectorResampleType(127);
+        vectorResampleType.name = "vector resample";
+        vectorResampleType.address = "math/vector/ops/";
+        vectorResampleType.tooltip = "Samples a vector at normalized coordinates [0..1], with interpolation and wrapping.";
+        vectorResampleType.inputs = {
+            InputFeatures("vector", InputType::decimal, 0, false),
+            InputFeatures("uv", InputType::decimal, 0, false)
+        };
+        vectorResampleType.getOutputSize = outputSizeByInputPin(1);
+        vectorResampleType.buildUI = [](NodeComponent&, NodeData&) {};
+        vectorResampleType.onResized = [](NodeComponent&) {};
+        vectorResampleType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
+            {
+                auto vec = inputs[0];
+                auto uvs = inputs[1];
+
+                int n = static_cast<int>(vec.size());
+                if (n == 0) {
+                    for (int i = 0; i < output.size(); i++) output[i] = 0.0;
+                    return;
+                }
+
+                for (int i = 0; i < uvs.size(); i++) {
+                    double uv = uvs[i].d;
+
+                    // wrap uv into [0,1)
+                    uv = uv - std::floor(uv);
+
+                    // map into [0, n-1]
+                    double scaledIdx = uv * (n - 1);
+
+                    int lower = static_cast<int>(std::floor(scaledIdx));
+                    int upper = static_cast<int>(std::ceil(scaledIdx));
+                    double frac = scaledIdx - lower;
+
+                    // wrap indices
+                    lower = (lower % n + n) % n;
+                    upper = (upper % n + n) % n;
+
+                    double v0 = vec[lower].d;
+                    double v1 = vec[upper].d;
+                    output[i] = v0 + frac * (v1 - v0);
+                }
+            };
+        vectorResampleType.outputType = InputType::decimal;
+        vectorResampleType.alwaysOutputsRuntimeData = false;
+        vectorResampleType.fromScene = nullptr;
+        registry.push_back(vectorResampleType);
+    }
+
+    {
+        NodeType t(128);
+        t.name = "indices from bool mask";
+        t.address = "math/vector/ops/";
+        t.tooltip = "Outputs indices of true values; fills rest with -1.";
+        t.inputs = {
+            InputFeatures("mask", InputType::boolean, 0, false)
+        };
+        t.getOutputSize = outputSizeByInputPin(0); // output has same length as input
+        t.buildUI = [](NodeComponent&, NodeData&) {};
+        t.onResized = [](NodeComponent&) {};
+        t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& in,
+            std::span<ddtype> out, const RunnerInput&)
+            {
+                const auto& mask = in[0];
+                int n = static_cast<int>(mask.size());
+
+                int writePos = 0;
+                for (int i = 0; i < n; i++) {
+                    if (mask[i].i) {
+                        if (writePos < n) {
+                            out[writePos++].i = i;
+                        }
+                    }
+                }
+                // Fill remaining with -1
+                for (; writePos < n; writePos++) {
+                    out[writePos].i = -1;
+                }
+            };
+        t.whichInputToFollowWildcard = 0;
+        t.outputType = InputType::integer;
+        t.alwaysOutputsRuntimeData = false;
+        t.fromScene = nullptr;
+        registry.push_back(t);
+    }
+
+    {
+        NodeType t(129);
+        t.name = "midi hz";
+        t.address = "audio/midi/";
+        t.tooltip = "Converts MIDI note numbers to frequencies in Hz.";
+        t.inputs = {
+            InputFeatures("midi", InputType::integer, 0, false)
+        };
+        t.getOutputSize = outputSizeByInputPin(0); // same length as input
+        t.buildUI = [](NodeComponent&, NodeData&) {};
+        t.onResized = [](NodeComponent&) {};
+        t.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& in,
+            std::span<ddtype> out, const RunnerInput&)
+            {
+                const auto& midi = in[0];
+                int n = static_cast<int>(midi.size());
+
+                for (int i = 0; i < n; i++) {
+                    int m = midi[i].i;
+                    double hz = 440.0 * std::pow(2.0, (m - 69) / 12.0);
+                    out[i].d = hz;
+                }
+            };
+        t.whichInputToFollowWildcard = 0;
+        t.outputType = InputType::decimal;
+        t.alwaysOutputsRuntimeData = false;
+        t.fromScene = nullptr;
+        registry.push_back(t);
+    }
+
+    // MIDI Controller value node
+    {
+        NodeType t(130);
+        t.name = "midi cc value";
+        t.address = "midi/";
+        t.tooltip = "Reads MIDI controller (CC) values from UserInput, normalized 0..1.";
+        t.inputs = {
+            InputFeatures("ccIndex", InputType::integer, 0, false)
+        };
+        t.getOutputSize = outputSizeByInputPin(0); // same length as indices
+        t.buildUI = [](NodeComponent&, NodeData&) {};
+        t.onResized = [](NodeComponent&) {};
+        t.execute = [](const NodeData&, UserInput& userInput,
+            const std::vector<std::span<ddtype>>& in,
+            std::span<ddtype> out, const RunnerInput&)
+            {
+                const auto& ccIdx = in[0];
+                int n = static_cast<int>(ccIdx.size());
+
+                for (int i = 0; i < n; ++i)
+                {
+                    int cc = ccIdx[i].i;
+                    float val = 0.0f;
+                    if (cc >= 0 && cc < (int)userInput.midiCCValues.size())
+                        val = userInput.midiCCValues[cc];
+                    out[i].d = val; // already normalized 0..1
+                }
+            };
+        t.whichInputToFollowWildcard = 0;
+        t.outputType = InputType::decimal;
+        t.alwaysOutputsRuntimeData = true;
+        t.fromScene = nullptr;
+        registry.push_back(t);
+    }
+
+    // DAW parameter value node
+    {
+        NodeType t(131);
+        t.name = "daw parameter";
+        t.address = "daw/";
+        t.tooltip = "Reads a DAW parameter’s current value (normalized 0..1).";
+        t.inputs = {
+            InputFeatures("paramIndex", InputType::integer, 0, false)
+        };
+        t.getOutputSize = outputSizeByInputPin(0); // same length as indices
+        t.buildUI = [](NodeComponent&, NodeData&) {};
+        t.onResized = [](NodeComponent&) {};
+        t.execute = [](const NodeData&, UserInput& userInput,
+            const std::vector<std::span<ddtype>>& in,
+            std::span<ddtype> out, const RunnerInput&)
+            {
+                const auto& idx = in[0];
+                int n = static_cast<int>(idx.size());
+
+                auto& params = userInput.dawParams; // from dawManager
+
+                for (int i = 0; i < n; ++i)
+                {
+                    int pi = idx[i].i;
+                    float val = 0.0f;
+                    if (pi >= 0 && pi < params.size())
+                        val = params[pi]; // already normalized 0..1
+                    out[i].d = val;
+                }
+            };
+        t.whichInputToFollowWildcard = 0;
+        t.outputType = InputType::decimal;
+        t.alwaysOutputsRuntimeData = true;
+        t.fromScene = nullptr;
+        registry.push_back(t);
+    }
+
+
+
+
 
     for (const auto& type : registry) {
         NodeType::putIdLookup(type);

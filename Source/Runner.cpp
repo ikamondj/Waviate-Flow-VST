@@ -39,7 +39,27 @@ void Runner::setupRecursive(NodeData* node, RunnerInput& inlineInstance) {
 	inlineInstance.nodesOrder.push_back(node);
 }
 
-
+inline void convert(const std::span<ddtype>& data, InputType outboundType, InputType inboundType) {
+	if (outboundType == InputType::decimal) {
+		if (inboundType == InputType::boolean) {
+			for (ddtype& d : data) { d.i = d.d > 0.5 ? 1 : 0; }
+		}
+		else if (inboundType == InputType::integer) {
+			for (ddtype& d : data) { d.i = static_cast<int64_t>(std::round(d.d)); }
+		}
+	}
+	else if (outboundType == InputType::integer) {
+		if (inboundType == InputType::boolean) {
+			for (ddtype& d : data) { d.i = (d.i == 0 ? 1 : 0); }
+		}
+		else if (inboundType == InputType::decimal) {
+			for (ddtype& d : data) { d.d = static_cast<double>(d.i); }
+		}
+	}
+	else if (inboundType == InputType::decimal) {
+		for (ddtype& d : data) { d.d = d.i ? 1.0 : 0.0; }
+	}
+}
 
 std::span<ddtype> Runner::run(const RunnerInput* runnerInputP, class UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
 {
@@ -54,6 +74,15 @@ std::span<ddtype> Runner::run(const RunnerInput* runnerInputP, class UserInput& 
 		for (int i = 0; i < node->getNumInputs(); i += 1) {
 			if (auto inputNode = node->getInput(i)) {
 				auto& otherspan = runnerInput.nodeOwnership.at(inputNode);
+				auto outboundType = inputNode->getType()->outputType;
+				auto inboundType = node->getType()->inputs[i].inputType;
+				if (outboundType == InputType::followsInput) {
+					outboundType = inputNode->getTrueType();
+				}
+				if (inboundType == InputType::any) {
+					inboundType = node->getTrueType();
+				}
+				convert(otherspan, outboundType, inboundType);
 				inputs.push_back(otherspan);
 			}
 			else {
@@ -213,7 +242,7 @@ void storeCopies(RunnerInput& input,
 }
 
 
-void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const std::vector<std::span<ddtype>>& outerInputs)
+void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs)
 {
 	input.nodesOrder.clear();
 	input.nodeOwnership.clear();
@@ -223,7 +252,7 @@ void Runner::initialize(RunnerInput& input, class SceneComponent* scene, const s
 	input.remap.clear();
 	input.field.clear();
 	if (!scene) { return; }
-	if (scene->nodes.empty()) { return; }
+	if (scene->nodeDatas.empty()) { return; }
 	std::unordered_map<NodeData*, NodeData*>& remap = input.remap;
 	NodeData* editorOutput = nullptr;
 

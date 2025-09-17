@@ -14,7 +14,8 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
     : AudioProcessorEditor(&p), 
     audioProcessor(p), 
     resizerBar(&horizontalLayout, 1, true), 
-    browser("browser", nullptr)
+    browser("browser", nullptr), 
+    scenePropertiesComponent(p)
 {
     
     setResizable(true, true);
@@ -66,7 +67,6 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
 
     addButton.onClick = [&]() {
         juce::String name = "New Function";
-        int i = 1;
 
         bool nameFound = false;
         for (auto& scene : audioProcessor.scenes) {
@@ -217,30 +217,35 @@ void WaviateFlow2025AudioProcessorEditor::deselectBrowserItem()
 void WaviateFlow2025AudioProcessorEditor::timerCallback()
 {
     return;
-    constexpr int tempSize = 256;
-    float temp[tempSize];
-    auto* scene = audioProcessor.getAudibleScene();
-    if (scene) {
-        juce::AudioVisualiserComponent* visualizer = dynamic_cast<juce::AudioVisualiserComponent*>(scene->nodes[0]->inputGUIElements.back().get());
+    //constexpr int tempSize = 256;
+    //float temp[tempSize];
+    //auto* scene = audioProcessor.getAudibleScene();
+    //if (scene) {
+    //    juce::AudioVisualiserComponent* visualizer = dynamic_cast<juce::AudioVisualiserComponent*>(scene->nodes[0]->inputGUIElements.back().get());
+    //
+    //    while (audioProcessor.fifo.getNumReady() > 0)
+    //    {
+    //        int start1, size1, start2, size2;
+    //        int toRead = std::min(audioProcessor.fifo.getNumReady(), tempSize);
+    //
+    //        audioProcessor.fifo.prepareToRead(toRead, start1, size1, start2, size2);
+    //
+    //        if (size1 > 0) std::memcpy(temp, audioProcessor.ring.data() + start1, size1 * sizeof(float));
+    //        if (size2 > 0) std::memcpy(temp + size1, audioProcessor.ring.data() + start2, size2 * sizeof(float));
+    //
+    //        audioProcessor.fifo.finishedRead(size1 + size2);
+    //
+    //        // Feed the chunk into JUCE's AudioVisualiserComponent
+    //        juce::AudioBuffer<float> buffer(1, tempSize);
+    //        buffer.addFrom(0, 0, temp, size1 + size2);
+    //        visualizer->pushBuffer(buffer);
+    //    }
+    //}
 
-        while (audioProcessor.fifo.getNumReady() > 0)
-        {
-            int start1, size1, start2, size2;
-            int toRead = std::min(audioProcessor.fifo.getNumReady(), tempSize);
+}
 
-            audioProcessor.fifo.prepareToRead(toRead, start1, size1, start2, size2);
-
-            if (size1 > 0) std::memcpy(temp, audioProcessor.ring.data() + start1, size1 * sizeof(float));
-            if (size2 > 0) std::memcpy(temp + size1, audioProcessor.ring.data() + start2, size2 * sizeof(float));
-
-            audioProcessor.fifo.finishedRead(size1 + size2);
-
-            // Feed the chunk into JUCE's AudioVisualiserComponent
-            juce::AudioBuffer<float> buffer(1, tempSize);
-            buffer.addFrom(0, 0, temp, size1 + size2);
-            visualizer->pushBuffer(buffer);
-        }
-    }
-
+juce::ThreadPool& WaviateFlow2025AudioProcessorEditor::getThreadPool()
+{
+    return this->pool;
 }
 

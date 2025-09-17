@@ -1,8 +1,14 @@
 
+#ifndef ISDESKTOPAPP
+#define ISDESKTOPAPP 0
+#endif
+
 
 #include "Validator.h"
 #include <optional>
+#if !ISDESKTOPAPP
 #include <pybind11/pybind11.h>
+#endif
 #include "Serializer.h"
 #include <nlohmann/json.hpp>
 #include "NodeType.h"
@@ -61,6 +67,10 @@ bool validateSerializedScene(const nlohmann::json& json) {
     return isValidType(type, fromScene);
 }
 
+#if !ISDESKTOPAPP
+
 PYBIND11_MODULE(json_validator, m) {
     m.def("validate_json", &validateSerializedScene, "Validate JSON string");
 }
+
+#endif

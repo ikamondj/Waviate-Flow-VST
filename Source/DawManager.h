@@ -16,6 +16,6 @@ public:
     bool isRecording();
     bool isLooping();
     bool isMetronomeEnabled();
-    const juce::Array< juce::AudioProcessorParameter * > & getParameters();
+    const juce::Array< juce::AudioProcessorParameter* >& getParameters();
     bool isRealtime();
-}
+};
