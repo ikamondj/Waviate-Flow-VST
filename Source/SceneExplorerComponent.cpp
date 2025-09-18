@@ -367,6 +367,10 @@ void SceneExplorerComponent::clearTree()
     tree.setRootItem(nullptr); // TreeView deletes the previous root
 }
 
+void SceneExplorerComponent::onUpdateUI()
+{
+}
+
 void SceneExplorerComponent::buildTree()
 {
     auto* root = new FolderItem(*this, audioProcessor, "Waviate Flow", /*relPath*/ "");

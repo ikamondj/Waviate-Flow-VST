@@ -10,6 +10,7 @@
 
 #pragma once
 #include <JuceHeader.h>
+#include "PropertiesMenu.h"
 
 class WaviateFlow2025AudioProcessor;
 class SceneData;
@@ -28,7 +29,7 @@ class SceneData;
  *  - Drag scene: provides a drag description (sceneId + nodeType) for the canvas
  *  - Right-click: context menu (delete/duplicate/rename; handlers are stubs)
  */
-class SceneExplorerComponent final : public juce::Component,
+class SceneExplorerComponent final : public PropertiesMenu,
     public juce::DragAndDropContainer
 {
 public:
@@ -65,4 +66,7 @@ private:
     
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SceneExplorerComponent)
+
+        // Inherited via PropertiesMenu
+        void onUpdateUI() override;
 };

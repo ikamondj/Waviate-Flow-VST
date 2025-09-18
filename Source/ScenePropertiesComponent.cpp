@@ -7,6 +7,11 @@ ScenePropertiesComponent::ScenePropertiesComponent(WaviateFlow2025AudioProcessor
 
 void ScenePropertiesComponent::setActiveScene(SceneComponent* scene) {
     activeSceneData = scene;
+    updateProperties();
+}
+
+void ScenePropertiesComponent::onUpdateUI()
+{
     if (activeSceneData) {
         nameEditor.setText(activeSceneData->getSceneName(), juce::dontSendNotification);
         addressEditor.setText(activeSceneData->customNodeType.address, juce::dontSendNotification);

@@ -105,13 +105,14 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
         canvas.addAndMakeVisible(scene.get());
     }
     
-    propertiesMenus.push_back(scenePropertiesComponent);
-    propertiesMenus.push_back(nodePropertiesComponent);
-    propertiesMenus.push_back(sceneExplorerComponent);
+    propertiesMenus.push_back(&scenePropertiesComponent);
+    propertiesMenus.push_back(&nodePropertiesComponent);
+    propertiesMenus.push_back(&sceneExplorerComponent);
 
     for (auto* p : propertiesMenus) {
         if (p) {
             addChildComponent(p);
+            addAndMakeVisible(p->openIconBTN);
         }
     }
     
@@ -224,10 +225,10 @@ void WaviateFlow2025AudioProcessorEditor::setActivePropertyMenu(int index)
 
 }
 
-void WaviateFlow2025AudioProcessorEditor::setActivePropertyMenu(const PropertyMenu* propMenu)
+void WaviateFlow2025AudioProcessorEditor::setActivePropertyMenu(const PropertiesMenu* propMenu)
 {
     for (int i = 0; i < propertiesMenus.size(); i += 1) {
-        PropertyMenu* p = propertiesMenus[i];
+        PropertiesMenu* p = propertiesMenus[i];
         if (p == propMenu) {
             return setActivePropertyMenu(i);
         }

@@ -24,7 +24,7 @@ void NodePropertiesComponent::setNodeComponent(NodeComponent* node)
     if (attachedNode != node)
     {
         attachedNode = node;
-        updatePropertiesUI();
+        updateProperties();
     }
 }
 
@@ -33,10 +33,10 @@ NodeComponent* NodePropertiesComponent::getNodeComponent() const
     return attachedNode;
 }
 
-void NodePropertiesComponent::updatePropertiesUI()
+void NodePropertiesComponent::onUpdateUI()
 {
     // Clear and rebuild property editors based on attachedNode's type and properties
     // For example, show/hide controls for compile-time, min/max, etc.
 
-    repaint();
+    
 }

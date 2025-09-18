@@ -9,3 +9,10 @@
 */
 
 #include "PropertiesMenu.h"
+
+void PropertiesMenu::updateProperties()
+{
+
+    onUpdateUI();
+    repaint();
+}

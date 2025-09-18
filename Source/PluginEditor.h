@@ -44,9 +44,9 @@ public:
     juce::StretchableLayoutManager horizontalLayout;
     juce::StretchableLayoutResizerBar resizerBar;
     
-    std::vector<class PropertyMenu*> propertiesMenus;
+    std::vector<class PropertiesMenu*> propertiesMenus;
     void setActivePropertyMenu(int index);
-    void setActivePropertyMenu(const PropertyMenu* propMenu);
+    void setActivePropertyMenu(const PropertiesMenu* propMenu);
     
     void deselectBrowserItem();
     void timerCallback() override;

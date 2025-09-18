@@ -17,9 +17,8 @@ public:
     void setNodeComponent(NodeComponent* node);
     // Get the current node
     NodeComponent* getNodeComponent() const;
-
-    // Call to update the UI when the node changes
-    void updatePropertiesUI();
+    void onUpdateUI() override;
+    
 
 private:
     NodeComponent* attachedNode = nullptr;
