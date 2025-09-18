@@ -8,14 +8,22 @@
 
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Animation.h"
+
+const float hz = 60.f;
+const float dt = 1.f / hz;
 
 //==============================================================================
 WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(WaviateFlow2025AudioProcessor& p)
-    : AudioProcessorEditor(&p), 
-    audioProcessor(p), 
-    resizerBar(&horizontalLayout, 1, true), 
-    browser("browser", nullptr), 
-    scenePropertiesComponent(p)
+    : AudioProcessorEditor(&p),
+    audioProcessor(p),
+    resizerBar(&horizontalLayout, 1, true),
+    browser("browser", nullptr),
+    scenePropertiesComponent(p),
+    sceneExplorerComponent(p),
+    authPropertiesComponent(p),
+    current(0.0),
+    sideVel(0.0)
 {
     
     setResizable(true, true);
@@ -97,22 +105,33 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
     };
 
     // Configure the layout manager for horizontal split
-    horizontalLayout.setItemLayout(0, -0.2, -0.8, -0.3); // browser: 20–80% (pref ~30%)
-    horizontalLayout.setItemLayout(1, 8, 8, 8);  // resizer bar: fixed 8 px
-    horizontalLayout.setItemLayout(2, -0.2, -0.8, -0.7); // canvas: 20–80% (pref ~70%)
+    horizontalLayout.setItemLayout(0, -0.0, -0.0, -0.0); // browser: 20–80% (pref ~30%)
+    horizontalLayout.setItemLayout(1, 0, 0, 0);  // resizer bar: fixed 8 px
+    horizontalLayout.setItemLayout(2, -1.0, -1.0, -1.0); // canvas: 20–80% (pref ~70%)
 
     for (auto& scene : audioProcessor.scenes) {
         canvas.addAndMakeVisible(scene.get());
     }
+
+    propertiesMenus.reserve(12);
     
     propertiesMenus.push_back(&scenePropertiesComponent);
     propertiesMenus.push_back(&nodePropertiesComponent);
     propertiesMenus.push_back(&sceneExplorerComponent);
+    propertiesMenus.push_back(&authPropertiesComponent);
 
     for (auto* p : propertiesMenus) {
         if (p) {
-            addChildComponent(p);
+            addAndMakeVisible(p);
             addAndMakeVisible(p->openIconBTN);
+            p->openIconBTN.onClick = [this, p]() {
+                if (activePropertyMenu != -1 && propertiesMenus[activePropertyMenu] == p) {
+                    this->setActivePropertyMenu(-1);
+                }
+                else {
+                    this->setActivePropertyMenu(p);
+                }
+            };
         }
     }
     
@@ -140,20 +159,24 @@ void WaviateFlow2025AudioProcessorEditor::paint(juce::Graphics& g)
 
 void WaviateFlow2025AudioProcessorEditor::resized()
 {
-
-    juce::Component* comps[] = { &browserArea, &resizerBar, &canvas };
+    auto propMenu = lastPropMenu;
+    juce::Component* comps[] = { propMenu, &resizerBar, &canvas};
     horizontalLayout.layOutComponents(comps, 3,
         0, 0, getWidth(), getHeight(),
         false, true);
-    browser.setSize(browserArea.getWidth(), browserArea.getHeight() - 30);
-    browser.setTopLeftPosition(0, 0);
-    addButton.setSize(30, 30);
-    addButton.setTopLeftPosition(0,browser.getHeight());
-    removeButton.setSize(30, addButton.getHeight());
-    nameSceneBox.setSize(browserArea.getWidth() - addButton.getWidth() - removeButton.getWidth(), addButton.getHeight());
-    nameSceneBox.setTopLeftPosition(addButton.getWidth(), addButton.getPosition().y);
-    removeButton.setTopLeftPosition(addButton.getWidth()+nameSceneBox.getWidth(), addButton.getPosition().y);
-    browser.repaint();
+    int iconButtonOffsetX = propMenu->getWidth() + 30;
+    int y = 30;
+    for (auto* p : propertiesMenus) {
+        if (p) {
+            if (p != propMenu) {
+                p->setSize(0, getHeight());
+                p->setTopLeftPosition(-1, -1);
+            }
+            p->openIconBTN.setSize(40, 40);
+            p->openIconBTN.setTopLeftPosition(iconButtonOffsetX, y);
+            y += 50;
+        }
+    }
 }
 
 int WaviateFlow2025AudioProcessorEditor::getNodeTypeId(const juce::String& name) const
@@ -171,28 +194,28 @@ int WaviateFlow2025AudioProcessorEditor::getNodeTypeId(const juce::String& name)
 bool WaviateFlow2025AudioProcessorEditor::keyPressed(const juce::KeyPress& k)
 {
     if (k.isKeyCode(juce::KeyPress::deleteKey)) {
-		if (auto* scene = audioProcessor.activeScene)
+		if (auto* scene = audioProcessor.getActiveScene())
 		{
-			if (scene->highlightedNode && scene->highlightedNode->getType().name.toLowerCase() != "output")
+			if (scene->getHighlightedNode() && scene->getHighlightedNode()->getType().name.toLowerCase() != "output")
 			{
-				scene->deleteNode(scene->highlightedNode);
-				scene->highlightedNode = nullptr;
+				scene->deleteNode(scene->getHighlightedNode());
+                scene->setHighlightedNode(nullptr);
 				repaint();
 			}
 		}
 		return true; // handled
 	}
     else if (k.isKeyCode(juce::KeyPress::escapeKey)) {
-        if (auto* scene = audioProcessor.activeScene)
+        if (auto* scene = audioProcessor.getActiveScene())
         {
-            scene->highlightedNode = nullptr;
+            scene->setHighlightedNode(nullptr);
             repaint();
         }
         return true; // handled
     }
     else if (audioProcessor.keyCodeTypeMapping.contains(k.getTextDescription())) {
-        if (audioProcessor.activeScene) {
-            audioProcessor.addNodeOfType(audioProcessor.keyCodeTypeMapping[k.getTextDescription()], juce::Point<int>(300, 300) - audioProcessor.activeScene->getPosition(), audioProcessor.activeScene);
+        if (audioProcessor.getActiveScene()) {
+            audioProcessor.addNodeOfType(audioProcessor.keyCodeTypeMapping[k.getTextDescription()], juce::Point<int>(300, 300) - audioProcessor.getActiveScene()->getPosition(), audioProcessor.getActiveScene());
             return true;
         }
     }
@@ -220,9 +243,20 @@ void WaviateFlow2025AudioProcessorEditor::setActivePropertyMenu(int index)
     activePropertyMenu = index;
     for (int i = 0; i < propertiesMenus.size(); i += 1) {
         auto* menu = propertiesMenus[i];
-        if (menu) { menu->setVisible(index == i); }
+        if (menu) { 
+            if (index == i) {
+                menu->setButtonIcon(true);
+                lastPropMenu = menu;
+                lastPropMenu->toFront(false);
+            }
+            else {
+                menu->setButtonIcon(false);
+                menu->toBack();
+            }
+            menu->openIconBTN.repaint();
+        }
     }
-
+    resized();
 }
 
 void WaviateFlow2025AudioProcessorEditor::setActivePropertyMenu(const PropertiesMenu* propMenu)
@@ -233,6 +267,7 @@ void WaviateFlow2025AudioProcessorEditor::setActivePropertyMenu(const Properties
             return setActivePropertyMenu(i);
         }
     }
+    setActivePropertyMenu(-1);
 }
 
 void WaviateFlow2025AudioProcessorEditor::deselectBrowserItem()
@@ -245,36 +280,57 @@ void WaviateFlow2025AudioProcessorEditor::deselectBrowserItem()
 
 void WaviateFlow2025AudioProcessorEditor::timerCallback()
 {
-    return;
-    //constexpr int tempSize = 256;
-    //float temp[tempSize];
-    //auto* scene = audioProcessor.getAudibleScene();
-    //if (scene) {
-    //    juce::AudioVisualiserComponent* visualizer = dynamic_cast<juce::AudioVisualiserComponent*>(scene->nodes[0]->inputGUIElements.back().get());
-    //
-    //    while (audioProcessor.fifo.getNumReady() > 0)
-    //    {
-    //        int start1, size1, start2, size2;
-    //        int toRead = std::min(audioProcessor.fifo.getNumReady(), tempSize);
-    //
-    //        audioProcessor.fifo.prepareToRead(toRead, start1, size1, start2, size2);
-    //
-    //        if (size1 > 0) std::memcpy(temp, audioProcessor.ring.data() + start1, size1 * sizeof(float));
-    //        if (size2 > 0) std::memcpy(temp + size1, audioProcessor.ring.data() + start2, size2 * sizeof(float));
-    //
-    //        audioProcessor.fifo.finishedRead(size1 + size2);
-    //
-    //        // Feed the chunk into JUCE's AudioVisualiserComponent
-    //        juce::AudioBuffer<float> buffer(1, tempSize);
-    //        buffer.addFrom(0, 0, temp, size1 + size2);
-    //        visualizer->pushBuffer(buffer);
-    //    }
-    //}
+    float target = activePropertyMenu != -1 ? 1.001f : -0.001f;
+    
+    current = smoothDamp(current, target, sideVel, .15f, dt);
+    if (current >= 1.f) { 
+        resizerBar.setEnabled(true);
+        current = 1.0; 
+        activePreferredValue = (float)resizerBar.getPosition().x;
+    }
+    else if (current <= 0.f) { 
+        current = 0.0; 
+        resizerBar.setEnabled(false);
+    }
+    else {
+        if (current > 0.99f) {
+            current = 1.0f;
+            sideVel = 0.0;
+        }
+        else if (current < 0.01f) {
+            current = 0.0f;
+            sideVel = 0.0;
+        }
+        horizontalLayout.setItemLayout(0, 200 * current, 320 * current, activePreferredValue); // browser: 20–80% (pref ~30%)
+        float fp = 8 * current;
+        horizontalLayout.setItemLayout(1, fp, fp, fp);  // resizer bar: fixed 8 px
+        horizontalLayout.setItemLayout(2, -0.001, -1.0, -1.0); // canvas: 20–80% (pref ~70%)
+        resizerBar.setEnabled(false);
+    }
 
+
+    
+    resized();
 }
 
 juce::ThreadPool& WaviateFlow2025AudioProcessorEditor::getThreadPool()
 {
     return this->pool;
+}
+
+void WaviateFlow2025AudioProcessorEditor::setActiveScene(SceneComponent* scene, bool shouldOpen)
+{
+    scenePropertiesComponent.setActiveScene(scene);
+    if (shouldOpen) {
+        setActivePropertyMenu(&scenePropertiesComponent);
+    }
+}
+
+void WaviateFlow2025AudioProcessorEditor::setActiveNode(NodeComponent* n, bool shouldOpen)
+{
+    nodePropertiesComponent.setNodeComponent(n);
+    if (shouldOpen) {
+        setActivePropertyMenu(&nodePropertiesComponent);
+    }
 }
 

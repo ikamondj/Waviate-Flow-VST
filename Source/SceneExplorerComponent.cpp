@@ -285,8 +285,7 @@ namespace
                 // Build child's relPath
                 juce::String childRel = relPath.isNotEmpty() ? (relPath + "/" + childName) : childName;
 
-                auto* child = new FolderItem(explorer, processor, childName, childRel);
-                addSubItem(child);
+                addSubItem(new FolderItem(explorer, processor, childName, childRel));
             }
 
             // Add scenes that live directly in this folder
@@ -326,7 +325,7 @@ SceneExplorerComponent::SceneExplorerComponent(WaviateFlow2025AudioProcessor& pr
     tree.setMultiSelectEnabled(false);
     tree.setIndentSize(14);
     tree.setRootItem(nullptr); // ensure clean state
-
+    setButtonIcon( BinaryData::SceneExplorerLogo_png, BinaryData::SceneExplorerLogo_pngSize);
     refresh();
 }
 
@@ -337,7 +336,7 @@ SceneExplorerComponent::~SceneExplorerComponent()
 
 void SceneExplorerComponent::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colours::darkgrey);
+    g.fillAll(juce::Colours::black);
 }
 
 void SceneExplorerComponent::resized()
@@ -373,11 +372,12 @@ void SceneExplorerComponent::onUpdateUI()
 
 void SceneExplorerComponent::buildTree()
 {
-    auto* root = new FolderItem(*this, audioProcessor, "Waviate Flow", /*relPath*/ "");
-    tree.setRootItem(root);
-    root->setOpen(true);
+    rootItem = std::make_unique<FolderItem>(*this, audioProcessor, "Waviate Flow", "");
+    tree.setRootItem(rootItem.get());
 
-    root->refreshChildren();
+    rootItem->setOpen(true);
+
+    dynamic_cast<FolderItem*>(rootItem.get())->refreshChildren();
 }
 
 juce::StringArray SceneExplorerComponent::splitPathComponents(const juce::String& relPath)

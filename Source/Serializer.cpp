@@ -66,6 +66,6 @@ std::optional<nlohmann::json> Serializer::serializeToJson(SceneData& scene, cons
     return j;
 }
 
-static std::optional<NodeType> deserialize(const std::string& rep) {
+std::optional<NodeType> Serializer::deserialize(const std::string& rep) {
     return {}; //TODO
 }

@@ -1542,7 +1542,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         InputFeatures("step count", InputType::integer, 1, true),
         InputFeatures("step size",  InputType::decimal, 1, false)
     };
-    for (auto& f : rangeType.inputs) f.defaultValue = 1.0;
+    for (auto& f : rangeType.inputs) f.defaultValue.i = 1;
     rangeType.getOutputSize = outputSizeFromInputScalar(1);
     rangeType.buildUI = [](NodeComponent&, NodeData&) {};
     rangeType.onResized = [](NodeComponent&) {};

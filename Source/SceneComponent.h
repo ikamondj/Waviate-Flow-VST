@@ -30,6 +30,7 @@ public:
 
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseDoubleClick(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
     void showMenu(juce::Point<int>, class NodeData* toConnect, int index);
@@ -50,7 +51,7 @@ public:
 	
     std::vector<NodeComponent*> highlightedNodes;
 	std::unordered_map<NodeData*, NodeComponent*> nodeToComponentMap;
-    NodeComponent* highlightedNode;
+    
     bool canPlaceType(const NodeType& type);
     
     
@@ -63,7 +64,8 @@ public:
     juce::TextButton deleteSceneButton{ "x" };
     juce::TextEditor sceneNameBox;
     
-    
+    void setHighlightedNode(NodeComponent* n);
+    NodeComponent* getHighlightedNode() const;
     
     double logScale = 0;
     juce::PopupMenu buildNodeTypeMenuCache();
@@ -71,4 +73,5 @@ public:
 private:
     void buildMenuRecursive(juce::PopupMenu& menu, const struct MenuNode& node, std::function<bool(const NodeType&)> condition);
     bool drawReady = false;
+    NodeComponent* highlightedNode;
 };

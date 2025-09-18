@@ -32,7 +32,7 @@ void BrowserModel::paintListBoxItem(int rowNumber, juce::Graphics& g,
     if (rowNumber >= 0 && rowNumber < getNumRows())
     {
         auto* scene = editorRef.audioProcessor.getScenes()[rowNumber].get();
-        if (scene == editorRef.audioProcessor.activeScene) {
+        if (scene == editorRef.audioProcessor.getActiveScene()) {
             g.setColour(juce::Colours::forestgreen);
         }
         else if (rowIsSelected)

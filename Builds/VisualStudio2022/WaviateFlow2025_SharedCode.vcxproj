@@ -150,6 +150,7 @@
     <ClCompile Include="..\..\Source\UserData.cpp"/>
     <ClCompile Include="..\..\Source\UserSessionManager.cpp"/>
     <ClCompile Include="..\..\Source\SceneData.cpp"/>
+    <ClCompile Include="..\..\Source\Animation.cpp"/>
     <ClCompile Include="..\..\Source\AudioReader.cpp"/>
     <ClCompile Include="..\..\Source\Noise.cpp"/>
     <ClCompile Include="..\..\Source\Serializer.cpp"/>
@@ -161,6 +162,7 @@
     <ClCompile Include="..\..\Source\Runner.cpp"/>
     <ClCompile Include="..\..\Source\RunnerInput.cpp"/>
     <ClCompile Include="..\..\Source\UserInput.cpp"/>
+    <ClCompile Include="..\..\Source\AuthPropertiesMenu.cpp"/>
     <ClCompile Include="..\..\Source\BrowserModel.cpp"/>
     <ClCompile Include="..\..\Source\DawManager.cpp"/>
     <ClCompile Include="..\..\Source\DrawingUtils.cpp"/>
@@ -2584,6 +2586,7 @@
     <ClInclude Include="..\..\Source\SceneData.h"/>
     <ClInclude Include="..\..\Source\InputType.h"/>
     <ClInclude Include="..\..\Source\ddtype.h"/>
+    <ClInclude Include="..\..\Source\Animation.h"/>
     <ClInclude Include="..\..\Source\AudioReader.h"/>
     <ClInclude Include="..\..\Source\Noise.h"/>
     <ClInclude Include="..\..\Source\Serializer.h"/>
@@ -2594,6 +2597,7 @@
     <ClInclude Include="..\..\Source\Runner.h"/>
     <ClInclude Include="..\..\Source\RunnerInput.h"/>
     <ClInclude Include="..\..\Source\UserInput.h"/>
+    <ClInclude Include="..\..\Source\AuthPropertiesMenu.h"/>
     <ClInclude Include="..\..\Source\BrowserModel.h"/>
     <ClInclude Include="..\..\Source\DawManager.h"/>
     <ClInclude Include="..\..\Source\DrawingUtils.h"/>
@@ -3616,6 +3620,10 @@
     <ClInclude Include="..\..\JuceLibraryCode\JucePluginDefines.h"/>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\NodePropertiesEditorLogo.png"/>
+    <None Include="..\..\SceneExplorerLogo.png"/>
+    <None Include="..\..\ScenePropertiesEditorLogo.png"/>
+    <None Include="..\..\AuthLogo.png"/>
     <None Include="..\..\..\..\..\..\OneDrive\Documents\JuceInstalls\JUCE\modules\juce_audio_devices\native\oboe\CMakeLists.txt"/>
     <None Include="..\..\..\..\..\..\OneDrive\Documents\JuceInstalls\JUCE\modules\juce_audio_devices\native\oboe\README.md"/>
     <None Include="..\..\..\..\..\..\OneDrive\Documents\JuceInstalls\JUCE\modules\juce_audio_formats\codecs\flac\Flac Licence.txt"/>

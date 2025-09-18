@@ -26,6 +26,10 @@ NodeData::NodeData(const NodeType& type) : type(type), compileTimeSizes()
     if (type.fromScene) {
 		optionalRunnerInput = std::make_unique<RunnerInput>();
     }
+    defaultValues.resize(type.inputs.size());
+    for (int i = 0; i < type.inputs.size(); i += 1) {
+        defaultValues[i] = type.inputs[i].defaultValue;
+    }
 }
 
 NodeData::NodeData(const NodeData& other) : NodeData(other.type) {
@@ -39,6 +43,7 @@ NodeData::NodeData(const NodeData& other) : NodeData(other.type) {
 	inputIndex = other.inputIndex;
 	trueType = other.trueType;
     optionalStoredAudio = other.optionalStoredAudio;
+    defaultValues = other.defaultValues;
 	isCopy = true;
 }
 
@@ -72,7 +77,7 @@ const std::vector<ddtype> NodeData::getCompileTimeValue(RunnerInput* inlineInsta
             in = input->getCompileTimeValue(inlineInstance);
         }
         else {
-            in.push_back(getType()->inputs[i].defaultValue);
+            in.push_back(defaultValues[i]);
         }
         ins.push_back(in);
     }

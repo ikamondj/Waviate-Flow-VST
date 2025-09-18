@@ -20,7 +20,6 @@ WaviateFlow2025AudioProcessor::WaviateFlow2025AudioProcessor() : dawManager(*thi
 		               .withInput("Side Chain", juce::AudioChannelSet::stereo(), false)
                        )
 #endif
-, dawMananger(*this)
 {
     userInput.numFramesStartOfBlock = 0;
     for (int i = 0; i < noteHzOfficialValues.size(); i += 1) {
@@ -434,14 +433,14 @@ void WaviateFlow2025AudioProcessor::setAudibleScene(SceneData* scene)
     }
 }
 
-void WaviateFlow2025AudioProcessor::setActiveScene(SceneComponent* scene)
+void WaviateFlow2025AudioProcessor::setActiveScene(SceneComponent* scene, bool shouldOpen)
 {
     scene->setVisible(true);
     scene->toFront(true);
     activeScene = scene;
     if (auto editor = getCurrentEditor()) {
         editor->browser.repaint();
-        editor->scenePropertiesComponent.setActiveScene(scene);
+        editor->setActiveScene(scene, shouldOpen);
     }
 }
 

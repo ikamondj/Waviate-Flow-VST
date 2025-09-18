@@ -63,6 +63,7 @@ public:
     void markUncompiled(const RunnerInput* inlineInstance);
     std::vector<NodeData*> inputNodes;
     std::vector<ddtype> optionalStoredAudio;
+    std::vector<ddtype> defaultValues;
     std::set<std::tuple<NodeData*, int>> outputs;
     enum class InputType getTrueType() const;
     void markWildCardTypesDirty();

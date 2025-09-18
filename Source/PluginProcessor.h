@@ -23,6 +23,7 @@
 
 class WaviateFlow2025AudioProcessor  : public juce::AudioProcessor
 {
+    class SceneComponent* activeScene;
 public:
     //==============================================================================
     WaviateFlow2025AudioProcessor();
@@ -72,7 +73,7 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
     void handleMidi(const juce::MidiMessage& message, UserInput& input);
     void initializeRunner();
-    class SceneComponent* activeScene;
+    
     
     std::unordered_map<juce::String, int> keyCodeTypeMapping;
     std::vector<NodeType> registry;
@@ -81,7 +82,7 @@ public:
     std::array<double, 128> noteHzOfficialValues;
     void initializeRegistry();
     void setAudibleScene(class SceneData* scene);
-    void setActiveScene(SceneComponent* scene);
+    void setActiveScene(SceneComponent* scene, bool shouldOpen = false);
     SceneComponent* getActiveScene();
     double maxOutBeforeDistortion = 10.0;
     static WaviateFlow2025AudioProcessor* GetActiveInstance();

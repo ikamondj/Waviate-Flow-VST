@@ -79,8 +79,8 @@ void SceneComponent::mouseDown(const juce::MouseEvent& e)
     }
     grabKeyboardFocus();
     
-    if (this != processorRef->activeScene) {
-        processorRef->activeScene = this;
+    if (this != processorRef->getActiveScene()) {
+        processorRef->setActiveScene(this);
     }
     this->highlightedNode = nullptr;
     if (e.mods.isRightButtonDown())
@@ -134,6 +134,13 @@ void SceneComponent::mouseDrag(const juce::MouseEvent& e)
     else if (isLeftDragging) {
         currentMouse = e.getOffsetFromDragStart() + dragStartMouse;
         repaint();
+    }
+}
+
+void SceneComponent::mouseDoubleClick(const juce::MouseEvent& e)
+{
+    if (e.mods.isLeftButtonDown()) {
+        processorRef->setActiveScene(this, true);
     }
 }
 
@@ -604,6 +611,20 @@ static void insertNode(MenuNode& root, const NodeType& node, int id)
 
     // Add the leaf node
     current->children[node.name] = MenuNode{ node.name, id, &node};
+}
+
+void SceneComponent::setHighlightedNode(NodeComponent* n)
+{
+    highlightedNode = n;
+    auto editor = processorRef->getCurrentEditor();
+    if (editor) {
+        editor->setActiveNode(n);
+    }
+}
+
+NodeComponent* SceneComponent::getHighlightedNode() const
+{
+    return highlightedNode;
 }
 
 juce::PopupMenu SceneComponent::buildNodeTypeMenuCache()

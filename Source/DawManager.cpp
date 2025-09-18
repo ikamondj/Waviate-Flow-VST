@@ -95,15 +95,6 @@ bool DawManager::isLooping() {
     return false;
 }
 
-bool DawManager::isMetronomeEnabled() {
-    if (auto* playHead = processor.getPlayHead()) {
-        juce::AudioPlayHead::CurrentPositionInfo posInfo;
-        if (playHead->getCurrentPosition(posInfo)) {
-            return posInfo.isMetronomeEnabled;
-        }
-    }
-    return false;
-}
 
 const juce::Array< juce::AudioProcessorParameter * > & DawManager::getParameters() {
     return processor.getParameters();

@@ -2,6 +2,9 @@
 
 <Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <Filter Include="WaviateFlow2025\Resources">
+      <UniqueIdentifier>{914648DE-7D3D-09FF-C3FC-62F3D992C4C7}</UniqueIdentifier>
+    </Filter>
     <Filter Include="WaviateFlow2025\Source\Network">
       <UniqueIdentifier>{BF1A0743-8000-0EA9-33BF-0CFC3C755A27}</UniqueIdentifier>
     </Filter>
@@ -658,6 +661,9 @@
     <ClCompile Include="..\..\Source\SceneData.cpp">
       <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Source\Animation.cpp">
+      <Filter>WaviateFlow2025\Source\Core\Utils</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\Source\AudioReader.cpp">
       <Filter>WaviateFlow2025\Source\Core\Utils</Filter>
     </ClCompile>
@@ -690,6 +696,9 @@
     </ClCompile>
     <ClCompile Include="..\..\Source\UserInput.cpp">
       <Filter>WaviateFlow2025\Source\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\AuthPropertiesMenu.cpp">
+      <Filter>WaviateFlow2025\Source\GUI</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Source\BrowserModel.cpp">
       <Filter>WaviateFlow2025\Source\GUI</Filter>
@@ -3327,6 +3336,9 @@
     <ClInclude Include="..\..\Source\ddtype.h">
       <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\Animation.h">
+      <Filter>WaviateFlow2025\Source\Core\Utils</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\AudioReader.h">
       <Filter>WaviateFlow2025\Source\Core\Utils</Filter>
     </ClInclude>
@@ -3356,6 +3368,9 @@
     </ClInclude>
     <ClInclude Include="..\..\Source\UserInput.h">
       <Filter>WaviateFlow2025\Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\AuthPropertiesMenu.h">
+      <Filter>WaviateFlow2025\Source\GUI</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\BrowserModel.h">
       <Filter>WaviateFlow2025\Source\GUI</Filter>
@@ -6419,6 +6434,18 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\NodePropertiesEditorLogo.png">
+      <Filter>WaviateFlow2025\Resources</Filter>
+    </None>
+    <None Include="..\..\SceneExplorerLogo.png">
+      <Filter>WaviateFlow2025\Resources</Filter>
+    </None>
+    <None Include="..\..\ScenePropertiesEditorLogo.png">
+      <Filter>WaviateFlow2025\Resources</Filter>
+    </None>
+    <None Include="..\..\AuthLogo.png">
+      <Filter>WaviateFlow2025\Resources</Filter>
+    </None>
     <None Include="..\..\..\..\..\..\OneDrive\Documents\JuceInstalls\JUCE\modules\juce_audio_devices\native\oboe\CMakeLists.txt">
       <Filter>JUCE Modules\juce_audio_devices\native\oboe</Filter>
     </None>

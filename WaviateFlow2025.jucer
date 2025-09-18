@@ -5,8 +5,17 @@
               pluginCharacteristicsValue="pluginWantsMidiIn" defines="ISDESKTOPAPP=1"
               bundleIdentifier="com.waviate.flow" pluginName="Waviate Flow"
               pluginManufacturer="Waviate" pluginVST3Category="Instrument"
-              pluginVSTCategory="kPlugCategSynth">
+              pluginVSTCategory="kPlugCategSynth" maxBinaryFileSize="20971520">
   <MAINGROUP id="h4dz7N" name="WaviateFlow2025">
+    <GROUP id="{9980AD28-F129-6A7E-1C17-7E4CC291A16B}" name="Resources">
+      <FILE id="zAmfjY" name="NodePropertiesEditorLogo.png" compile="0" resource="1"
+            file="NodePropertiesEditorLogo.png"/>
+      <FILE id="F0AwT8" name="SceneExplorerLogo.png" compile="0" resource="1"
+            file="SceneExplorerLogo.png"/>
+      <FILE id="Kf7HDI" name="ScenePropertiesEditorLogo.png" compile="0"
+            resource="1" file="ScenePropertiesEditorLogo.png"/>
+      <FILE id="ypmfh9" name="AuthLogo.png" compile="0" resource="1" file="AuthLogo.png"/>
+    </GROUP>
     <GROUP id="{CFBFC01F-0A0E-7A20-8E13-2744F9F342F7}" name="Source">
       <GROUP id="{01F3D01E-8826-B8F6-07E0-3F20024851F1}" name="Network">
         <FILE id="dlw9KV" name="JWTManager.cpp" compile="1" resource="0" file="Source/JWTManager.cpp"/>
@@ -32,6 +41,8 @@
         <FILE id="WRcyQK" name="InputType.h" compile="0" resource="0" file="Source/InputType.h"/>
         <FILE id="lzPMN3" name="ddtype.h" compile="0" resource="0" file="Source/ddtype.h"/>
         <GROUP id="{64960AC0-DF34-E9B2-9A54-DDD55378AFF5}" name="Utils">
+          <FILE id="fjWmKG" name="Animation.cpp" compile="1" resource="0" file="Source/Animation.cpp"/>
+          <FILE id="BB5RUG" name="Animation.h" compile="0" resource="0" file="Source/Animation.h"/>
           <FILE id="DSP2bG" name="AudioReader.cpp" compile="1" resource="0" file="Source/AudioReader.cpp"/>
           <FILE id="uLv4K9" name="AudioReader.h" compile="0" resource="0" file="Source/AudioReader.h"/>
           <FILE id="j1LlI4" name="Noise.cpp" compile="1" resource="0" file="Source/Noise.cpp"/>
@@ -59,6 +70,10 @@
         <FILE id="VjjW2c" name="UserInput.h" compile="0" resource="0" file="Source/UserInput.h"/>
       </GROUP>
       <GROUP id="{B706E6F2-22F2-EC40-D35E-5BC29689A32B}" name="GUI">
+        <FILE id="ibosYH" name="AuthPropertiesMenu.cpp" compile="1" resource="0"
+              file="Source/AuthPropertiesMenu.cpp"/>
+        <FILE id="krQI96" name="AuthPropertiesMenu.h" compile="0" resource="0"
+              file="Source/AuthPropertiesMenu.h"/>
         <FILE id="rjImok" name="BrowserModel.cpp" compile="1" resource="0"
               file="Source/BrowserModel.cpp"/>
         <FILE id="WYOfnh" name="BrowserModel.h" compile="0" resource="0" file="Source/BrowserModel.h"/>

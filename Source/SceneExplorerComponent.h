@@ -48,6 +48,8 @@ public:
 
     static void enumerateScenesInFolder(const juce::File& appRoot, const juce::String& folderRelPath, juce::Array<SceneData*>& outScenes);
     static juce::StringArray splitPathComponents(const juce::String& relPath);
+    std::unique_ptr<juce::TreeViewItem> rootItem;
+
 private:
     WaviateFlow2025AudioProcessor& audioProcessor;
 

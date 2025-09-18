@@ -189,3 +189,13 @@ void SceneData::setSceneName(const std::string& newName)
 {
 	sceneName = newName;
 }
+
+bool SceneData::isMarketplaceContent()
+{
+    return false; //TODO FIX
+}
+
+bool SceneData::isLocalEditable()
+{
+    return true; //TODO FIX
+}

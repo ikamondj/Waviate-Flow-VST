@@ -86,7 +86,7 @@ std::span<ddtype> Runner::run(const RunnerInput* runnerInputP, class UserInput& 
 				inputs.push_back(otherspan);
 			}
 			else {
-				emptyInputDefaults[i] = node->getType()->inputs[i].defaultValue;
+				emptyInputDefaults[i] = node->defaultValues[i];
 				std::span<ddtype> otherspan(&emptyInputDefaults[i], 1);
 				inputs.push_back(otherspan);
 			}
@@ -149,7 +149,7 @@ std::vector<ddtype> Runner::findRemainingSizes(NodeData* node, RunnerInput& inli
 			}
 			else {
 
-				std::vector<ddtype> inputsOutput = { node->getType()->inputs[i].defaultValue };
+				std::vector<ddtype> inputsOutput = { node->defaultValues[i]};
 				inputspans.push_back(inputsOutput);
 			}
 		}
@@ -285,7 +285,7 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::v
 			std::vector<ddtype> extraspace;
 			for (int i = 0; i < node->getNumInputs(); i += 1) {
 				auto input = node->getInput(i);
-				extraspace.push_back(node->getType()->inputs[i].defaultValue);
+				extraspace.push_back(node->defaultValues[i]);
 			}
 			auto& output = input.nodeOwnership[node];
 			std::vector<std::span<ddtype>> inputs;

@@ -37,10 +37,10 @@ void NodeComponent::paint(juce::Graphics& g)
     rect = rect.withLeft(rect.getX() + sides).withRight(rect.getRight() - sides);
 
     
-    g.setColour(juce::Colour::fromHSV(colorHash(getType().address), this == owningScene.highlightedNode ? .9f : .5f, this == owningScene.highlightedNode ? .9f : .45f, 1.f));
+    g.setColour(juce::Colour::fromHSV(colorHash(getType().address), this == owningScene.getHighlightedNode() ? .9f : .5f, this == owningScene.getHighlightedNode() ? .9f : .45f, 1.f));
     g.fillRoundedRectangle(rect, cornerSize);
 
-    if (this == owningScene.highlightedNode) {
+    if (this == owningScene.getHighlightedNode()) {
         g.setColour(juce::Colours::darkgrey.brighter(0.3f));
     }
     else {
@@ -215,6 +215,8 @@ juce::String ddtypeToString(ddtype d, InputType type) {
 	}
 }
 
+
+
 void NodeComponent::mouseDown(const juce::MouseEvent& e)
 {
     grabKeyboardFocus();
@@ -259,7 +261,7 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                 }
                 if (!inputNode) {
                     const auto& inp = getNodeDataConst().getType()->inputs[overInput];
-                    ddtype value = inp.defaultValue;
+                    ddtype value = getNodeDataConst().defaultValues[overInput];
 					juce::String v = inp.inputType == InputType::decimal ? juce::String(value.d)
 						: inp.inputType == InputType::boolean ? (value.i == 0 ? juce::String("false") : juce::String("true"))
 						: juce::String(value.i);
@@ -342,7 +344,7 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
         draggingConnection = false;
         dragStartPos = getPosition();
         toFront(true);
-        owningScene.highlightedNode = this;
+        owningScene.setHighlightedNode(this);
         repaint();
         owningScene.repaint();
     }
@@ -462,11 +464,14 @@ void NodeComponent::mouseDoubleClick(const juce::MouseEvent& event)
     if (auto scene = dynamic_cast<SceneComponent*>(getType().fromScene)) {
         scene->setVisible(true);
         scene->toFront(true); // bring to front
-        getProcessorRef().activeScene = scene;
+        getProcessorRef().setActiveScene(scene);
         if (getProcessorRef().getCurrentEditor()) {
             getProcessorRef().getCurrentEditor()->browser.repaint();
         }
         
+    }
+    else {
+        getProcessorRef().getCurrentEditor()->setActiveNode(this, true);
     }
 }
 

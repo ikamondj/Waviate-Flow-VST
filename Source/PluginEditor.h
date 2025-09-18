@@ -17,6 +17,7 @@
 #include "SceneExplorerComponent.h"
 #include "ScenePropertiesComponent.h"
 #include "NodeData.h"
+#include "AuthPropertiesMenu.h"
 #include "BrowserModel.h"
 #include "RunnerInput.h"
 
@@ -52,12 +53,19 @@ public:
     void timerCallback() override;
     WaviateFlow2025AudioProcessor& audioProcessor;
     juce::ThreadPool& getThreadPool();
+    void setActiveScene(SceneComponent* scene, bool shouldOpen = false);
+    void setActiveNode(NodeComponent* n, bool shouldOpen = false);
 private:
+    float sideVel;
+    float current;
     ScenePropertiesComponent scenePropertiesComponent;
     NodePropertiesComponent nodePropertiesComponent;
     SceneExplorerComponent sceneExplorerComponent;
+    AuthPropertiesMenu authPropertiesComponent;
     int activePropertyMenu = -1;
+    float activePreferredValue;
     juce::ThreadPool pool{ 4 }; // 4 worker threads, adjust as needed
+    PropertiesMenu* lastPropMenu = &authPropertiesComponent;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(WaviateFlow2025AudioProcessorEditor)
 
 public:
