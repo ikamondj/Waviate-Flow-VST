@@ -173,6 +173,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             {
                 for (int i = 0; i < static_cast<int>(inputs[0].size()); ++i) output[i] = inputs[0][i];
             };
+        outputType.emitCode = "for (int i = 0; i < i0size...";
         outputType.getOutputSize = outputSizeEqualsSingleInputSize;
         outputType.buildUI = [](NodeComponent& n, NodeData& d) {
             n.inputGUIElements.push_back(std::make_unique<juce::AudioVisualiserComponent>(1));
