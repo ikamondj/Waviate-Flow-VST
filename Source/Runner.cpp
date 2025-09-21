@@ -360,7 +360,7 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 			// If input pin j comes from an input node:
 			const int pin = nd->inputIndex;
 			emitCode << "ddtype* i0 = inputs[" << pin << "];\n";
-			emitCode << "int isize0 = inputSizes[" << pin << "];\n";
+			emitCode << "const int isize0 = inputSizes[" << pin << "];\n";
 
 		}
 		else {
@@ -369,8 +369,59 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 				if (inp) {
 					const auto i = nodeFieldVars.at(inp);
 					emitCode << "ddtype* i" << juce::String(j) << " = field" << juce::String(i) << ";\n";
-					emitCode << "int isize" << juce::String(j) << " = size" << juce::String(i) << ";\n";
-				}
+					emitCode << "const int isize" << juce::String(j) << " = size" << juce::String(i) << ";\n";
+
+					auto itype = nd->getType()->inputs[j].inputType;
+					if (itype == InputType::any) {
+						itype = nd->getTrueType();
+					}
+					auto otype = inp->getType()->outputType;
+					if (otype == InputType::followsInput) {
+						otype = inp->getTrueType();
+					}
+					if (otype == InputType::boolean) {
+						if (itype == InputType::decimal) {
+							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
+							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
+								<< "i" << j << "_conv[k].i = (i" << j << "[k].d > 0.5 ? 1 : 0); }\n";
+							emitCode << "i" << j << " = i" << j << "_conv;\n";
+						}
+						else if (itype == InputType::integer) {
+							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
+							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
+								<< "i" << j << "_conv[k].i = (i" << j << "[k].i != 0 ? 1 : 0); }\n";
+							emitCode << "i" << j << " = i" << j << "_conv;\n";
+						}
+					}
+					else if (otype == InputType::integer) {
+						if (itype == InputType::boolean) {
+							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
+							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
+								<< "i" << j << "_conv[k].i = (i" << j << "[k].i != 0 ? 1 : 0); }\n";
+							emitCode << "i" << j << " = i" << j << "_conv;\n";
+						}
+						else if (itype == InputType::decimal) {
+							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
+							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
+								<< "i" << j << "_conv[k].i = (int64_t)round(i" << j << "[k].d); }\n";
+							emitCode << "i" << j << " = i" << j << "_conv;\n";
+						}
+					}
+					else if (otype == InputType::decimal) {
+						if (itype == InputType::boolean) {
+							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
+							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
+								<< "i" << j << "_conv[k].d = (i" << j << "[k].i != 0 ? 1.0 : 0.0); }\n";
+							emitCode << "i" << j << " = i" << j << "_conv;\n";
+						}
+						else if (itype == InputType::integer) {
+							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
+							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
+								<< "i" << j << "_conv[k].d = (double)i" << j << "[k].i; }\n";
+							emitCode << "i" << j << " = i" << j << "_conv;\n";
+						}
+					}
+ 				}
 				else {
 					auto type = nd->getType()->inputs[j].inputType;
 					if (type == InputType::any) {
@@ -386,7 +437,6 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 
 					emitCode << "ddtype* i" << juce::String(j) << " = &val" << juce::String(j) << ";\n";
 				}
-				// TODO make a converted copy, convert node types as needed and point i<j> to it here instead 
 			}
 		}
 		emitCode << nd->getType()->emitCode << "}\n\n";
@@ -394,7 +444,7 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 }
 
 const juce::String clangHeader(uint64_t x) {
-	return ddtypeClangJ + UserInputClangJ + "\nvoid nodeTypeOutput" + juce::String(x) + "(ddtype* output, int outputSize, ddtype** inputs, int* inputSizes, int numInputs) {";
+	return ddtypeClangJ + UserInputClangJ + "#include <math.h>\nvoid nodeTypeOutput" + juce::String(x) + "(ddtype* output, int outputSize, ddtype** inputs, int* inputSizes, int numInputs) {";
 }
 const juce::String clangCloser = "}";
 
