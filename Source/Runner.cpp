@@ -50,7 +50,7 @@ inline void convert(const std::span<ddtype>& data, InputType outboundType, Input
 	}
 	else if (outboundType == InputType::integer) {
 		if (inboundType == InputType::boolean) {
-			for (ddtype& d : data) { d.i = (d.i == 0 ? 1 : 0); }
+			for (ddtype& d : data) { d.i = (d.i == 0 ? 0 : 1); }
 		}
 		else if (inboundType == InputType::decimal) {
 			for (ddtype& d : data) { d.d = static_cast<double>(d.i); }
