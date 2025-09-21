@@ -356,39 +356,38 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 			}
 			
 		}
-		for (int j = 0; j < nd->getNumInputs(); j += 1) {
-			auto* inp = nd->getInput(j);
-			if (inp) {
-				if (inp->getType()->isInputNode) {
-					// If input pin j comes from an input node:
-					const int pin = inp->inputIndex;
-					emitCode << "ddtype* i" << j << " = inputs[" << pin << "];\n";
-					emitCode << "int isize" << j << " = inputSizes[" << pin << "];\n";
+		if (nd->getType()->isInputNode) {
+			// If input pin j comes from an input node:
+			const int pin = nd->inputIndex;
+			emitCode << "ddtype* i0 = inputs[" << pin << "];\n";
+			emitCode << "int isize0 = inputSizes[" << pin << "];\n";
 
-				}
-				else {
+		}
+		else {
+			for (int j = 0; j < nd->getNumInputs(); j += 1) {
+				auto* inp = nd->getInput(j);
+				if (inp) {
 					const auto i = nodeFieldVars.at(inp);
 					emitCode << "ddtype* i" << juce::String(j) << " = field" << juce::String(i) << ";\n";
 					emitCode << "int isize" << juce::String(j) << " = size" << juce::String(i) << ";\n";
 				}
-				
-			}
-			else {
-				auto type = nd->getType()->inputs[j].inputType;
-				if (type == InputType::any) {
-					type = nd->getTrueType();
-				}
-				emitCode << "ddtype val" << juce::String(j) << " = { 0 };\n";
-				if (type == InputType::decimal) {
-					emitCode << "val" << j << ".d = " << juce::String(nd->defaultValues[j].d) << ";\n";
-				}
 				else {
-					emitCode << "val" << j << ".i = " << juce::String(nd->defaultValues[j].i) << ";\n";
-				}
+					auto type = nd->getType()->inputs[j].inputType;
+					if (type == InputType::any) {
+						type = nd->getTrueType();
+					}
+					emitCode << "ddtype val" << juce::String(j) << " = { 0 };\n";
+					if (type == InputType::decimal) {
+						emitCode << "val" << j << ".d = " << juce::String(nd->defaultValues[j].d) << ";\n";
+					}
+					else {
+						emitCode << "val" << j << ".i = " << juce::String(nd->defaultValues[j].i) << ";\n";
+					}
 
-				emitCode << "ddtype* i" << juce::String(j) << " = &val" << juce::String(j) << ";\n";
+					emitCode << "ddtype* i" << juce::String(j) << " = &val" << juce::String(j) << ";\n";
+				}
+				// TODO make a converted copy, convert node types as needed and point i<j> to it here instead 
 			}
-			
 		}
 		emitCode << nd->getType()->emitCode << "}\n\n";
 	}
