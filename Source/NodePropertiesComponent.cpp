@@ -81,35 +81,7 @@ void NodePropertiesComponent::rebuildEditors()
     if (!attachedNode)
         return;
 
-    // Input-node special fields
-    if (attachedNode->getType().isInputNode)
-    {
-        placeholderNameLabel = std::make_unique<juce::Label>("", "Placeholder Name:");
-        placeholderNameEditor = std::make_unique<juce::TextEditor>();
-        compileTimeToggle = std::make_unique<juce::ToggleButton>("Force Compile-Time");
-
-        addAndMakeVisible(*placeholderNameLabel);
-        addAndMakeVisible(*placeholderNameEditor);
-        addAndMakeVisible(*compileTimeToggle);
-
-        placeholderNameEditor->onTextChange = [this] {
-            if (attachedNode)
-                attachedNode->getNodeData().setProperty("name",placeholderNameEditor->getText().toStdString());
-            };
-        compileTimeToggle->setEnabled(false);
-        compileTimeToggle->onClick = [this] (){
-            if (attachedNode)
-            {
-                //TODO force compile time
-            }
-        };
-    }
-    else
-    {
-        placeholderNameLabel.reset();
-        placeholderNameEditor.reset();
-        compileTimeToggle.reset();
-    }
+    attachedNode->getType().setupPropertiesUI(*this);
 
     // Per-input controls
     inputEditors.reserve(attachedNode->getType().inputs.size());
@@ -188,4 +160,66 @@ void NodePropertiesComponent::rebuildEditors()
             addAndMakeVisible(*slot.control);
     }
 
+}
+
+std::function<void(NodePropertiesComponent& npc)>
+setupBinaryArithmeticUI(NodeType& componentWise, NodeType& outerProduct, NodeType& scalar)
+{
+    return [&](NodePropertiesComponent& npc) {
+        // Label for dropdown
+        npc.ownedComponents.emplace("arithLabel", std::make_unique<juce::Label>("", "Arithmetic Type:"));
+        auto* arithLabel = dynamic_cast<juce::Label*>(npc.ownedComponents.at("arithLabel").get());
+
+        // Dropdown for selecting arithmetic type
+        npc.ownedComponents.emplace("arithCombo", std::make_unique<juce::ComboBox>());
+        auto* arithCombo = dynamic_cast<juce::ComboBox*>(npc.ownedComponents.at("arithCombo").get());
+
+        // Add choices
+        arithCombo->addItem("Component-wise", 1);
+        arithCombo->addItem("Outer Product", 2);
+        arithCombo->addItem("Scalar", 3);
+
+        // Make visible
+        npc.addAndMakeVisible(*arithLabel);
+        npc.addAndMakeVisible(*arithCombo);
+
+        // Event hook (user fills in behavior later)
+        arithCombo->onChange = [&, arithCombo]() {
+            if (npc.getNodeComponent())
+            {
+                // TODO: handle user selecting arithmetic type
+                // int selectedId = arithCombo->getSelectedId();
+                // switch (selectedId) { ... }
+            }
+        };
+    };
+}
+
+std::function<void(NodePropertiesComponent& ncp)> setupInputTypeUI()
+{
+    return [&](NodePropertiesComponent& npc) {
+        npc.ownedComponents.emplace("pholdlab", std::make_unique<juce::Label>("", "Placeholder Name:"));
+        auto* placeholderNameLabel = dynamic_cast<juce::Label*>(npc.ownedComponents.at("pholdlab").get());
+        npc.ownedComponents.emplace("pholdedit", std::make_unique<juce::TextEditor>());
+        auto* placeholderNameEditor = dynamic_cast<juce::TextEditor*>(npc.ownedComponents.at("pholdedit").get());
+        npc.ownedComponents.emplace("force_ct", std::make_unique<juce::ToggleButton>("Force Compile-Time"));
+        juce::ToggleButton* compileTimeToggle = dynamic_cast<juce::ToggleButton*>(npc.ownedComponents.at("force_ct").get());
+
+        npc.addAndMakeVisible(*placeholderNameLabel);
+        npc.addAndMakeVisible(*placeholderNameEditor);
+        npc.addAndMakeVisible(*compileTimeToggle);
+
+        placeholderNameEditor->onTextChange = [&] {
+            if (npc.getNodeComponent()) {
+                npc.getNodeComponent()->getNodeData().setProperty("name", placeholderNameEditor->getText().toStdString());
+            }
+        };
+        compileTimeToggle->setEnabled(false);
+        compileTimeToggle->onClick = [&]() {
+            if (npc.getNodeComponent())
+            {
+                //TODO force compile time
+            }
+        };
+    };
 }

@@ -676,9 +676,6 @@
     <ClCompile Include="..\..\Source\Validator.cpp">
       <Filter>WaviateFlow2025\Source\Core\Persistence</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\Source\CircleBuffer.cpp">
-      <Filter>WaviateFlow2025\Source\Core</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\Source\NodeData.cpp">
       <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClCompile>
@@ -692,9 +689,6 @@
       <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Source\RunnerInput.cpp">
-      <Filter>WaviateFlow2025\Source\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\Source\UserInput.cpp">
       <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Source\AuthPropertiesMenu.cpp">
@@ -3345,14 +3339,14 @@
     <ClInclude Include="..\..\Source\Noise.h">
       <Filter>WaviateFlow2025\Source\Core\Utils</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\StringifyDefines.h">
+      <Filter>WaviateFlow2025\Source\Core\Utils</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\Serializer.h">
       <Filter>WaviateFlow2025\Source\Core\Persistence</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Validator.h">
       <Filter>WaviateFlow2025\Source\Core\Persistence</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Source\CircleBuffer.h">
-      <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\NodeData.h">
       <Filter>WaviateFlow2025\Source\Core</Filter>

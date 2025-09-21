@@ -56,9 +56,10 @@ public:
     
     
 
-	NodeComponent& addNode(const NodeType& type, juce::Point<int> localPos);
-    NodeComponent& addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index);
-	void deleteNode(NodeComponent* node);
+	NodeComponent& addNode(const NodeType& type, juce::Point<int> localPos, bool updateScene = true);
+    NodeComponent& addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index, bool updateScene = true);
+	void deleteNode(NodeComponent* node, bool updateScene = true);
+    void replaceNode(NodeComponent* node, const NodeType& newType);
     void ensureNodeConnectionsCorrect(RunnerInput*);
     
     juce::TextButton deleteSceneButton{ "x" };
@@ -66,6 +67,8 @@ public:
     
     void setHighlightedNode(NodeComponent* n);
     NodeComponent* getHighlightedNode() const;
+
+
     
     double logScale = 0;
     juce::PopupMenu buildNodeTypeMenuCache();

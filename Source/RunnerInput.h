@@ -15,6 +15,10 @@
 #include <unordered_set>
 #include <vector>
 #include "ddtype.h"
+
+using NodeFn = void(*)(ddtype* output, int outputSize,
+    ddtype** inputs, int* inputSizes, int numInputs);
+
 class NodeData;
 class RunnerInput {
 public:
@@ -27,5 +31,7 @@ public:
     std::unordered_set<NodeData*> compileTimeKnown;
     std::unordered_map<NodeData*, std::vector<ddtype>> nodeCompileTimeOutputs;
     std::unordered_map<NodeData*, NodeData*> remap;
+    std::string clangcode;
+    NodeFn compiledFunc;
     NodeData* outputNode = nullptr;
 };

@@ -7,27 +7,62 @@
 
   ==============================================================================
 */
-#include <array>
-#include <unordered_map>
-#include "CircleBuffer.h"
-#include <JuceHeader.h>
 #pragma once
-class UserInput
+#define MIDI_NOTE_COUNT 128
+#define CIRCLEBUFFER_CAPACITY 480000
+#include "StringifyDefines.h"
+
+DEFINE_AND_CREATE_VAR(
+    static inline void CircleBuffer_init(int* head, int* count) {
+    *head = 0;
+    *count = 0;
+}
+
+static inline void CircleBuffer_add(double* data,
+    int* head,
+    int* count,
+    double value) {
+    data[*head] = value;
+    *head = (*head + 1) % CIRCLEBUFFER_CAPACITY;
+    if (*count < CIRCLEBUFFER_CAPACITY) {
+        (*count)++;
+    }
+}
+
+static inline int CircleBuffer_size(const int* count) {
+    return *count;
+}
+
+static inline int CircleBuffer_capacity(void) {
+    return CIRCLEBUFFER_CAPACITY;
+}
+
+static inline double CircleBuffer_get(const double* data,
+    const int* head,
+    const int* count,
+    int indexAgo) {
+    if (indexAgo >= *count) {
+        return 0.0;
+    }
+    int idx = (*head + CIRCLEBUFFER_CAPACITY - 1 - indexAgo) % CIRCLEBUFFER_CAPACITY;
+    return data[idx];
+}
+
+typedef struct
 {
-public:
-    std::array<double, 128> notesOn;
-    std::array<double, 128> noteStartFrame;
-	std::array<double, 128> noteEndFrame;
-	std::array<double, 128> noteVelocity;
-	std::array<double, 128> controllerValues;
-    std::array<double, 128> noteHz;
-    std::array<double, 128> noteCycle;
-    std::array<int, 128> midiCCValues;
-    std::array<double, 128> dawParams;
+    double notesOn[MIDI_NOTE_COUNT];
+    double noteStartFrame[MIDI_NOTE_COUNT];
+    double noteEndFrame[MIDI_NOTE_COUNT];
+    double noteVelocity[MIDI_NOTE_COUNT];
+    double controllerValues[MIDI_NOTE_COUNT];
+    double noteHz[MIDI_NOTE_COUNT];
+    double noteCycle[MIDI_NOTE_COUNT];
+    double dawParams[MIDI_NOTE_COUNT];
+    int midiCCValues[MIDI_NOTE_COUNT];
     double pitchWheelValue;
     double modWheelValue;
-    int64_t numFramesStartOfBlock;
-    int64_t sampleInBlock;
+    long long numFramesStartOfBlock;
+    long long sampleInBlock;
     double sampleRate;
     double leftInput;
     double rightInput;
@@ -42,10 +77,20 @@ public:
     int timeSigTop;
     int timeSigBottom;
     double BPM;
-	CircleBuffer leftInputHistory;
-    CircleBuffer rightInputHistory;
-    double getHistoricalSample(int samplesAgo) const;
-    std::unordered_map<juce::String, double> namedValues;
-    std::unordered_map<int, double> storeableValues;
-    const class RunnerInput* runner = nullptr;
-};
+    double leftInputHistoryArray[CIRCLEBUFFER_CAPACITY];
+    int leftInputHistoryHead = 0;
+    int leftInputHistorySize = 0;
+    double rightInputHistoryArray[CIRCLEBUFFER_CAPACITY];
+    int rightInputHistoryHead = 0;
+    int rightInputHistorySize = 0;
+    //double getHistoricalSample(int samplesAgo) const;
+    //std::unordered_map<juce::String, double> namedValues;
+    //std::unordered_map<int, double> storeableValues;
+
+} UserInput;
+
+
+, UserInputClang
+)
+
+const juce::String UserInputClangJ(UserInputClang);

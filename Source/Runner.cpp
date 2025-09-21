@@ -7,6 +7,16 @@
 
   ==============================================================================
 */
+#include <JuceHeader.h>
+
+#include <llvm/ExecutionEngine/Orc/LLJIT.h>
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
+#include <llvm/Support/TargetSelect.h>
+#include <clang/CodeGen/CodeGenAction.h>
+#include <clang/Frontend/CompilerInstance.h>
+#include <clang/Frontend/TextDiagnosticPrinter.h>
+#include <clang/Tooling/Tooling.h>
+
 
 #include "Runner.h"
 #include "NodeData.h"
@@ -14,11 +24,84 @@
 #include "UserInput.h"
 #include "NodeComponent.h"
 #include "PluginProcessor.h"
+#include <format>
 #include "NodeType.h"
 
 
 
+static std::unique_ptr<llvm::orc::LLJIT> GlobalJIT;  // keep alive
 
+NodeFn compileNodeKernel(const std::string& sourceCode,
+	const std::string& funcName = "nodeTypeOutput")
+{
+	using namespace clang;
+	using namespace clang::tooling;
+	using namespace llvm;
+	using namespace llvm::orc;
+
+	// One-time LLVM target init
+	static bool initialized = false;
+	if (!initialized) {
+		LLVMInitializeNativeTarget();
+		LLVMInitializeNativeAsmPrinter();
+		LLVMInitializeNativeAsmParser();
+		initialized = true;
+	}
+
+	// Diagnostic setup for Clang
+	llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts(new clang::DiagnosticOptions());
+	auto diagClient = new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
+	clang::DiagnosticsEngine diags(
+		llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs>(new clang::DiagnosticIDs()),
+		&*diagOpts, diagClient);
+
+	// Clang compiler instance
+	clang::CompilerInstance compiler;
+	compiler.createDiagnostics(diagClient, false);
+
+	// Args: pretend like clang++
+	std::vector<std::string> args = {
+		"clang++", "-std=c++17", "-O2", "-fno-exceptions", "-fno-rtti"
+	};
+
+	// Wrap the source in memory buffer
+	auto buffer = llvm::MemoryBuffer::getMemBuffer(sourceCode, "<jit-input>");
+
+	// Create CodeGen action (emits LLVM IR Module)
+	std::unique_ptr<clang::CodeGenAction> action(new clang::EmitLLVMOnlyAction());
+
+	bool success = clang::tooling::runToolOnCode(
+		action.release(), buffer->getBuffer(), args, "<jit-input>", "clang-tool", std::make_shared<clang::PCHContainerOperations>());
+
+	if (!success) {
+		throw std::runtime_error("Clang frontend failed");
+	}
+
+	// Take ownership of the Module
+	std::unique_ptr<llvm::Module> module = action->takeModule();
+	if (!module) {
+		throw std::runtime_error("No module produced by Clang");
+	}
+
+	// Create global JIT if not already
+	if (!GlobalJIT) {
+		auto jit = cantFail(LLJITBuilder().create());
+		GlobalJIT = std::move(jit);
+	}
+
+	// Wrap in ThreadSafeModule
+	auto TSM = llvm::orc::ThreadSafeModule(std::move(module),
+		std::make_unique<llvm::LLVMContext>());
+
+	// Add to JIT
+	cantFail(GlobalJIT->addIRModule(std::move(TSM)));
+
+	// Lookup symbol
+	auto sym = cantFail(GlobalJIT->lookup(funcName));
+	return reinterpret_cast<NodeFn>(sym.getAddress());
+}
+
+uint64_t globalCompileCounter;
 
 void Runner::setupRecursive(NodeData* node, RunnerInput& inlineInstance) {
 	
@@ -61,7 +144,13 @@ inline void convert(const std::span<ddtype>& data, InputType outboundType, Input
 	}
 }
 
-std::span<ddtype> Runner::run(const RunnerInput* runnerInputP, class UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
+std::span<ddtype> Runner::runClang(const RunnerInput* runnerInputP, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
+{
+	ddtype** outInps = &outerInputs.data()[0]
+	runnerInputP->compiledFunc()
+}
+
+std::span<ddtype> Runner::run(const RunnerInput* runnerInputP, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
 {
 	if (!runnerInputP) return std::span<ddtype, 0>();
 	auto& runnerInput = *runnerInputP;
@@ -241,6 +330,74 @@ void storeCopies(RunnerInput& input,
 	}
 }
 
+juce::String Runner::initializeClang(const RunnerInput& input, const class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs) {
+	juce::String emitCode;
+	std::unordered_map<NodeData*, int> nodeFieldVars;
+	{
+		int i = 0;
+		
+		for (auto nd : input.nodesOrder) {
+			int count = nd->getCompileTimeSize(&input);
+			nodeFieldVars.insert({ nd, i});
+			emitCode << "ddtype " << "field" << juce::String(i) << "[" << juce::String(count) << "]"  << ";\n";
+			emitCode << "int size" << juce::String(i++) << " = " << juce::String(count) << ";\n";
+		}
+	}
+
+	for (const auto nd : input.nodesOrder) { 
+		{
+			const auto i = nodeFieldVars.at(nd);
+			if (nd != input.outputNode) {
+				emitCode << "{ ddtype* o = field" << juce::String(i) << ";\n";
+				emitCode << "int osize = size" << juce::String(i) << ";\n";
+			}
+			else {
+				emitCode << "{ ddtype* o = output;\n int osize = outputSize;\n";
+			}
+			
+		}
+		for (int j = 0; j < nd->getNumInputs(); j += 1) {
+			auto* inp = nd->getInput(j);
+			if (inp) {
+				if (inp->getType()->isInputNode) {
+					// If input pin j comes from an input node:
+					const int pin = inp->inputIndex;
+					emitCode << "ddtype* i" << j << " = inputs[" << pin << "];\n";
+					emitCode << "int isize" << j << " = inputSizes[" << pin << "];\n";
+
+				}
+				else {
+					const auto i = nodeFieldVars.at(inp);
+					emitCode << "ddtype* i" << juce::String(j) << " = field" << juce::String(i) << ";\n";
+					emitCode << "int isize" << juce::String(j) << " = size" << juce::String(i) << ";\n";
+				}
+				
+			}
+			else {
+				auto type = nd->getType()->inputs[j].inputType;
+				if (type == InputType::any) {
+					type = nd->getTrueType();
+				}
+				emitCode << "ddtype val" << juce::String(j) << " = { 0 };\n";
+				if (type == InputType::decimal) {
+					emitCode << "val" << j << ".d = " << juce::String(nd->defaultValues[j].d) << ";\n";
+				}
+				else {
+					emitCode << "val" << j << ".i = " << juce::String(nd->defaultValues[j].i) << ";\n";
+				}
+
+				emitCode << "ddtype* i" << juce::String(j) << " = &val" << juce::String(j) << ";\n";
+			}
+			
+		}
+		emitCode << nd->getType()->emitCode << "}\n\n";
+	}
+}
+
+const juce::String clangHeader(uint64_t x) {
+	return ddtypeClangJ + UserInputClangJ + "\nvoid nodeTypeOutput" + juce::String(x) + "(ddtype* output, int outputSize, ddtype** inputs, int* inputSizes, int numInputs) {";
+}
+const juce::String clangCloser = "}";
 
 void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs)
 {
@@ -251,6 +408,7 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::v
 	input.nodeCopies.clear();
 	input.remap.clear();
 	input.field.clear();
+	input.clangcode = "";
 	if (!scene) { return; }
 	if (scene->nodeDatas.empty()) { return; }
 	std::unordered_map<NodeData*, NodeData*>& remap = input.remap;
@@ -276,6 +434,11 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::v
 			input.nodeOwnership[node] = std::span<ddtype>(input.field.data() + offset, size);
 		}
 	}
+	juce::String clangCode = initializeClang(input, scene, outerInputs);
+
+	input.clangcode = (clangHeader(globalCompileCounter) + clangCode + clangCloser).toStdString();
+
+	input.compiledFunc = compileNodeKernel(input.clangcode, (juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString());
 
 	UserInput fakeInput;
 	std::vector<NodeData*> tempNodesOrder;
@@ -328,4 +491,7 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::v
 	}
 	input.nodesOrder = tempNodesOrder;
 	std::vector<ddtype> tempField;
+
+	//TODO emit c++ compile with clang do this as a series of reusable functions. one which emits the full cpp code so server can reuse this. one which compiles it down to runnable function and stores this in the runner
+
 }

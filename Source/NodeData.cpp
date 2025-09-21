@@ -165,7 +165,7 @@ NodeData* NodeData::getInput(size_t idx) {
     return inputNodes[idx];
 }
 
-bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r, SceneData* referenceScene)
+bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r, SceneData* referenceScene, bool updateScene)
 {
     if (idx >= type.inputs.size())
         return false; // out of bounds for this node type
@@ -286,14 +286,14 @@ bool NodeData::attachInput(size_t idx, NodeData* other, RunnerInput& r, SceneDat
         }
     //}
 
-    if (ref) {
+    if (ref && updateScene) {
         ref->onSceneChanged();
     }
     
     return true;
 }
 
-void NodeData::detachInput(size_t idx, SceneData* referenceScene)
+void NodeData::detachInput(size_t idx, SceneData* referenceScene, bool updateScene)
 {
     if (idx < inputNodes.size()) {
         if (inputNodes[idx]) {
@@ -304,7 +304,7 @@ void NodeData::detachInput(size_t idx, SceneData* referenceScene)
         }
         inputNodes[idx] = nullptr;
 		auto ref = dynamic_cast<SceneComponent*>(referenceScene);
-        if (ref) { ref->onSceneChanged(); }
+        if (ref && updateScene) { ref->onSceneChanged(); }
     }
 }
 

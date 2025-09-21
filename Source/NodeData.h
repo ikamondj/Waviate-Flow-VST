@@ -47,9 +47,9 @@ public:
     std::unique_ptr<RunnerInput> optionalRunnerInput = nullptr;
 
     // Attach only if index valid & no loop
-    bool attachInput(size_t idx, NodeData* other, class RunnerInput& inlineInstance, class SceneData* referenceScene);
+    bool attachInput(size_t idx, NodeData* other, class RunnerInput& inlineInstance, class SceneData* referenceScene, bool updateScene = true);
 
-    void detachInput(size_t idx, SceneData* referenceScene);
+    void detachInput(size_t idx, SceneData* referenceScene, bool updateScene = true);
 
 	const bool isCompileTimeKnown() const noexcept;
 

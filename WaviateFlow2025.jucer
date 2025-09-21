@@ -47,6 +47,8 @@
           <FILE id="uLv4K9" name="AudioReader.h" compile="0" resource="0" file="Source/AudioReader.h"/>
           <FILE id="j1LlI4" name="Noise.cpp" compile="1" resource="0" file="Source/Noise.cpp"/>
           <FILE id="QI1Wwu" name="Noise.h" compile="0" resource="0" file="Source/Noise.h"/>
+          <FILE id="AVOPBf" name="StringifyDefines.h" compile="0" resource="0"
+                file="Source/StringifyDefines.h"/>
         </GROUP>
         <GROUP id="{E3BF9F4F-F81D-3CED-8688-BBB0E1366367}" name="Persistence">
           <FILE id="DqSX1P" name="Serializer.cpp" compile="1" resource="0" file="Source/Serializer.cpp"/>
@@ -54,9 +56,6 @@
           <FILE id="IvuQWX" name="Validator.cpp" compile="1" resource="0" file="Source/Validator.cpp"/>
           <FILE id="K5CEhj" name="Validator.h" compile="0" resource="0" file="Source/Validator.h"/>
         </GROUP>
-        <FILE id="mPbU9p" name="CircleBuffer.cpp" compile="1" resource="0"
-              file="Source/CircleBuffer.cpp"/>
-        <FILE id="xi3Hre" name="CircleBuffer.h" compile="0" resource="0" file="Source/CircleBuffer.h"/>
         <FILE id="BRTQSI" name="NodeData.cpp" compile="1" resource="0" file="Source/NodeData.cpp"/>
         <FILE id="ABaIXW" name="NodeData.h" compile="0" resource="1" file="Source/NodeData.h"/>
         <FILE id="JePp2E" name="NodeType.cpp" compile="1" resource="0" file="Source/NodeType.cpp"/>
@@ -66,7 +65,6 @@
         <FILE id="lBEJ44" name="Runner.h" compile="0" resource="0" file="Source/Runner.h"/>
         <FILE id="iYHwWQ" name="RunnerInput.cpp" compile="1" resource="0" file="Source/RunnerInput.cpp"/>
         <FILE id="iXMzrl" name="RunnerInput.h" compile="0" resource="0" file="Source/RunnerInput.h"/>
-        <FILE id="nxVip7" name="UserInput.cpp" compile="1" resource="0" file="Source/UserInput.cpp"/>
         <FILE id="VjjW2c" name="UserInput.h" compile="0" resource="0" file="Source/UserInput.h"/>
       </GROUP>
       <GROUP id="{B706E6F2-22F2-EC40-D35E-5BC29689A32B}" name="GUI">

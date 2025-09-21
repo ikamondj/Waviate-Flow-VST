@@ -7,6 +7,7 @@
 #include "NodeData.h"
 #include "InputType.h"
 #include "ddtype.h"
+#include "UserInput.h"
 
 
 struct InputFeatures {
@@ -32,7 +33,7 @@ struct NodeType {
     juce::String address;
     juce::String tooltip;
     std::vector<InputFeatures> inputs;
-    using ExecuteFn = void(*)(const NodeData& node, class UserInput& userInput, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const class RunnerInput& inlineInstance);
+    using ExecuteFn = void(*)(const NodeData& node, UserInput& userInput, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const class RunnerInput& inlineInstance);
     ExecuteFn execute;
     std::function<void(class NodeComponent&, NodeData&)> buildUI;
     std::function<int(const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<ddtype>>& inputs, const class RunnerInput& inlineInstance, int inputNum, const NodeData& self)> getOutputSize;
@@ -52,11 +53,13 @@ struct NodeType {
     static const NodeType* getTypeByNodeID(uint64_t fullId);
     static void putIdLookup(const NodeType& t);
     void setNodeId(uint64_t userId, uint64_t nodeId);
+    std::string emitCode;
     bool ownsScene = false;
     NodeType(uint64_t nodeId);
     NodeType(uint64_t userId, uint64_t nodeId, class WaviateFlow2025AudioProcessor&);
     int whichInputToFollowWildcard = -1;
 	static NodeType& getConversionType(InputType from, InputType to);
+    std::function<void(class NodePropertiesComponent& npc)> setupPropertiesUI = [](class NodePropertiesComponent& npc) {};
     ~NodeType();
 };
 

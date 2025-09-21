@@ -481,13 +481,13 @@ bool SceneComponent::canPlaceType(const NodeType& type)
 
 
 
-NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos)
+NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos, bool updateScene)
 {
 
-    return addNode(type, localPos, nullptr, -1);
+    return addNode(type, localPos, nullptr, -1, updateScene);
 }
 
-NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index)
+NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> localPos, NodeData* toConnect, int index, bool updateScene)
 {
 
     // Create node
@@ -502,22 +502,24 @@ NodeComponent& SceneComponent::addNode(const NodeType& type, juce::Point<int> lo
     
     addAndMakeVisible(nodePtr);
 
-    onSceneChanged();
-    
-    if (toConnect) {
-        if (index >= 0) {
-            toConnect->attachInput(index, &nodePtr->getNodeData(), *this, this);
+    if (updateScene || toConnect) {
+        onSceneChanged();
+
+        if (toConnect) {
+            if (index >= 0) {
+                toConnect->attachInput(index, &nodePtr->getNodeData(), *this, this);
+            }
+            else {
+                nodePtr->getNodeData().attachInput(0, toConnect, *this, this);
+            }
         }
-        else {
-            nodePtr->getNodeData().attachInput(0, toConnect, *this, this);
-        }
+        onSceneChanged();
     }
-    onSceneChanged();
 	return *nodePtr;
 }
 
 
-void SceneComponent::deleteNode(NodeComponent* node)
+void SceneComponent::deleteNode(NodeComponent* node, bool updateScene)
 {
 	drawReady = false;
 	// Remove node from nodes vector
@@ -560,8 +562,38 @@ void SceneComponent::deleteNode(NodeComponent* node)
 
 	// Remove the node component from the scene
 	removeChildComponent(node);
-    onSceneChanged();
+    if (updateScene) {
+        onSceneChanged();
+    }
     
+    
+}
+
+void SceneComponent::replaceNode(NodeComponent* node, const NodeType& newType)
+{
+    std::vector<NodeData*> inputs;
+    juce::Point<int> pos = node->getPosition();
+    size_t numInputs = node->getType().inputs.size();
+    for (auto* n : node->getNodeDataConst().inputNodes) {
+        inputs.push_back(n);
+    }
+
+    std::vector<std::pair<NodeData*, int>> outputs;
+
+    for (const auto& [c, i] : node->getNodeDataConst().outputs) {
+        outputs.push_back({ c, i });
+    }
+
+    deleteNode(node, false);
+    auto& newNode = addNode(newType, pos, false);
+    for (int i = 0; i < inputs.size(); i += 1) {
+        newNode.getNodeData().attachInput(i, inputs[i], *this, this, false);
+    }
+    for (const auto& [c, i] : outputs) {
+        c->attachInput(i, &newNode.getNodeData(), *this, this, false);
+    }
+    
+    onSceneChanged();
 }
 
 void SceneComponent::ensureNodeConnectionsCorrect(RunnerInput* r) {
