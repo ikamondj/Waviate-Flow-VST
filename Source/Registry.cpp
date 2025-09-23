@@ -1022,7 +1022,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
     notType.execute = [](const NodeData&, UserInput&, const std::vector<std::span<ddtype>>& inputs, std::span<ddtype> output, const RunnerInput& inlineInstance)
         {
             for (int i = 0; i < static_cast<int>(inputs[0].size()); ++i)
-                output[i] = inputs[0][i].i ? 1.0 : 0.0;
+                output[i].i = inputs[0][i].i ? 0 : 1;
         };
     notType.outputType = InputType::boolean;
     notType.alwaysOutputsRuntimeData = false;
@@ -1045,8 +1045,8 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             const int b = static_cast<int>(inputs[1].size());
             const int n = std::min(a, b);
             const int m = std::max(a, b);
-            for (int i = 0; i < n; ++i) output[i] = (inputs[0][i].i && inputs[1][i].i) ? 1.0 : 0.0;
-            for (int i = n; i < m; ++i) output[i] = 0.0;
+            for (int i = 0; i < n; ++i) output[i].i = (inputs[0][i].i && inputs[1][i].i) ? 1 : 0;
+            for (int i = n; i < m; ++i) output[i].i = 0;
         };
     andType.outputType = InputType::boolean;
     andType.alwaysOutputsRuntimeData = false;

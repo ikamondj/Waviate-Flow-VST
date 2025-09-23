@@ -1,3 +1,0 @@
-functions_framework
-pybind11
-SQLAlchemy
