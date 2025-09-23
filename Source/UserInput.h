@@ -94,4 +94,4 @@ struct UserInput
 , UserInputClang
 );
 
-const juce::String UserInputClangJ(UserInputClang);
+inline const juce::String UserInputClangJ(UserInputClang);

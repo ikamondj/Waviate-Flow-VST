@@ -173,7 +173,6 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             {
                 for (int i = 0; i < static_cast<int>(inputs[0].size()); ++i) output[i] = inputs[0][i];
             };
-        outputType.emitCode = "for (int i = 0; i < i0size...";
         outputType.getOutputSize = outputSizeEqualsSingleInputSize;
         outputType.buildUI = [](NodeComponent& n, NodeData& d) {
             n.inputGUIElements.push_back(std::make_unique<juce::AudioVisualiserComponent>(1));
@@ -2742,17 +2741,17 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
         t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput& r) {
             out[0].d = in[1][0].d;
-            if (&r == u.runner) { 
-                int key = in[0][0].i;
-                if (u.storeableValues.contains(key)) {
-                    u.storeableValues[key] = in[1][0].d;
-                }
-                else {
-                    u.storeableValues.insert({ key, in[1][0].d });
-                }
-            }
+            //if (&r == u.runner) { 
+            //    int key = in[0][0].i;
+            //    if (u.storeableValues.contains(key)) {
+            //        u.storeableValues[key] = in[1][0].d;
+            //    }
+            //    else {
+            //        u.storeableValues.insert({ key, in[1][0].d });
+            //    }
+            //}
         };
-        t.emitCode = "v" + juce::String(;
+        //t.emitCode = "v" + juce::String(;
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
 
@@ -2765,7 +2764,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
         t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput&) {
             int key = in[0][0].i;
-			out[0].d = u.storeableValues.contains(key) ? u.storeableValues.at(key) : 0.0;
+			//out[0].d = u.storeableValues.contains(key) ? u.storeableValues.at(key) : 0.0;
         };
 
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = true; t.fromScene = nullptr; registry.push_back(t);
@@ -3044,11 +3043,10 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         };
         t.globalVarNames = [](NodeData& nd, int uniqueNodeOrder) {
             std::vector<GlobalClangVar> globVars;
-            globVars.push_back(("static double v" + juce::String(uniqueNodeOrder) + nd.getStringProperty("name") + ";").toStdString());
             GlobalClangVar var;
             var.isStatic = true;
             var.type = "double";
-            var.name = ("v" + juce::String(uniqueNodeOrder) + nd.getStringProperty("name")).toStdString();
+            var.varName = ("v" + juce::String(uniqueNodeOrder) + nd.getStringProperty("name")).toStdString();
             globVars.push_back(var);
             return globVars;
         };

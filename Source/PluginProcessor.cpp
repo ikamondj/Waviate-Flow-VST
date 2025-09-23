@@ -492,7 +492,9 @@ uint64_t WaviateFlow2025AudioProcessor::getCurrentLoadedUserIndex()
 void WaviateFlow2025AudioProcessor::initializeAllScenes()
 {
     for (auto& scene : scenes) {
-        Runner::initialize(*scene, scene.get(), std::vector<std::span<ddtype>>());
+        if (scene.get()) {
+            Runner::initialize(*scene, scene.get(), std::vector<std::span<ddtype>>());
+        }
     }
 }
 

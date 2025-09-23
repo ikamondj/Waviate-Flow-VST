@@ -39,7 +39,7 @@
 static std::unique_ptr<llvm::orc::LLJIT> GlobalJIT;  // keep alive
 
 NodeFn compileNodeKernel(const std::string& sourceCode,
-	const std::string& funcName = "nodeTypeOutput", llvm::OptimizationLevel OX)
+	const std::string& funcName = "nodeTypeOutput", llvm::OptimizationLevel OX = llvm::OptimizationLevel::O3)
 {
 	using namespace llvm;
 	using namespace llvm::orc;
@@ -89,8 +89,6 @@ NodeFn compileNodeKernel(const std::string& sourceCode,
 
 	MPM.run(*M, MAM);
 
-	// Suppose action produced `std::unique_ptr<llvm::Module> M`
-	std::unique_ptr<llvm::Module> M = action.takeModule();
 
 	auto jit = cantFail(LLJITBuilder().create());
 	auto TSM = orc::ThreadSafeModule(std::move(M), std::make_unique<LLVMContext>());
@@ -373,15 +371,6 @@ inline std::string sanitizeIdentifier(const std::string& s) {
 	return out;
 }
 
-// Format double as safe numeric literal for C++ source
-inline std::string emitNumericLiteral(double d) {
-	if (!std::isfinite(d)) {
-		return "0.0"; // fallback if NaN or inf
-	}
-	char buf[64];
-	std::snprintf(buf, sizeof(buf), "%.17g", d); // precise, portable
-	return buf;
-}
 
 
 juce::String Runner::initializeClang(const RunnerInput& input, const class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs) {
@@ -423,7 +412,7 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 	}
 
 
-	i = 0;
+	int ord = 0;
 	for (const auto nd : input.nodesOrder) { 
 		{
 			const auto i = nodeFieldVars.at(nd);
@@ -536,10 +525,20 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 				}
 			}
 		}
-		emitCode << nd->getType()->emitCode(*nd,i) << "}\n\n";
-		i += 1;
+		emitCode << nd->getType()->emitCode(*nd,ord) << "}\n\n";
+		ord += 1;
 	}
+	return emitCode;
 }
+
+const char* ddtypeClang =
+"#include <stdint.h>\n"
+"typedef union {\n"
+"    double d;\n"
+"    int64_t i;\n"
+"} ddtype;\n";
+
+const juce::String ddtypeClangJ(ddtypeClang);
 
 const juce::String clangHeader(uint64_t x) {
 	return ddtypeClangJ + UserInputClangJ + "#include <cmath>\n#include <cstdlib>\nextern \"C\" void nodeTypeOutput" + juce::String(x) + "(ddtype * output, int outputSize, ddtype * *inputs, int* inputSizes, int numInputs) { ";

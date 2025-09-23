@@ -11,4 +11,4 @@
 #pragma once
 #define NODE_CODE(code) code
 #define NODE_CODE_STR(code) #code
-#define DEFINE_AND_CREATE_VAR(code, codeVarName) NODE_CODE(code); const char* codeVarName = NODE_CODE_STR(code);
+#define DEFINE_AND_CREATE_VAR(code, codeVarName) NODE_CODE(code); inline const char* codeVarName = NODE_CODE_STR(code);

@@ -43,6 +43,6 @@ private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(NodePropertiesComponent)
 };
 
-std::function<void(NodePropertiesComponent& npc)> setupBinaryArithmeticUI(NodeType& componentWise, NodeType& outerProduct, NodeType& scalar);
+std::function<void(NodePropertiesComponent& npc)> setupBinaryArithmeticUI(class NodeType& componentWise, NodeType& outerProduct, NodeType& scalar);
 
 std::function<void(NodePropertiesComponent& ncp)> setupInputTypeUI();
