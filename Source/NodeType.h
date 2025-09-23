@@ -28,6 +28,12 @@ struct InputFeatures {
     ddtype defaultValue = 0.0;
 };
 
+struct GlobalClangVar {
+    bool isStatic;
+    std::string type;
+    std::string varName;
+};
+
 struct NodeType {
     juce::String name;
     juce::String address;
@@ -53,7 +59,8 @@ struct NodeType {
     static const NodeType* getTypeByNodeID(uint64_t fullId);
     static void putIdLookup(const NodeType& t);
     void setNodeId(uint64_t userId, uint64_t nodeId);
-    std::string emitCode;
+    std::function<std::string(NodeData&, int uniqueNodeOrder)> emitCode;
+    std::function<std::vector<GlobalClangVar>(NodeData&, int uniqueNodeOrder)> globalVarNames;
     bool ownsScene = false;
     NodeType(uint64_t nodeId);
     NodeType(uint64_t userId, uint64_t nodeId, class WaviateFlow2025AudioProcessor&);

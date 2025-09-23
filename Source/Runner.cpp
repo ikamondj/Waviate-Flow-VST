@@ -16,6 +16,13 @@
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/Tooling/Tooling.h>
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/OptimizationLevel.h"
+#include "llvm/Analysis/LoopAnalysisManager.h"
+
 
 
 #include "Runner.h"
@@ -32,73 +39,65 @@
 static std::unique_ptr<llvm::orc::LLJIT> GlobalJIT;  // keep alive
 
 NodeFn compileNodeKernel(const std::string& sourceCode,
-	const std::string& funcName = "nodeTypeOutput")
+	const std::string& funcName = "nodeTypeOutput", llvm::OptimizationLevel OX)
 {
-	using namespace clang;
-	using namespace clang::tooling;
 	using namespace llvm;
 	using namespace llvm::orc;
 
-	// One-time LLVM target init
 	static bool initialized = false;
 	if (!initialized) {
-		LLVMInitializeNativeTarget();
-		LLVMInitializeNativeAsmPrinter();
-		LLVMInitializeNativeAsmParser();
+		InitializeNativeTarget();
+		InitializeNativeTargetAsmPrinter();
+		InitializeNativeTargetAsmParser();
 		initialized = true;
 	}
 
-	// Diagnostic setup for Clang
-	llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diagOpts(new clang::DiagnosticOptions());
-	auto diagClient = new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
-	clang::DiagnosticsEngine diags(
+	// set up Clang to compile C code to LLVM IR
+	clang::CompilerInstance CI;
+	auto diagOpts = llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions>(new clang::DiagnosticOptions());
+	auto diagPrinter = new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
+	auto diags = new clang::DiagnosticsEngine(
 		llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs>(new clang::DiagnosticIDs()),
-		&*diagOpts, diagClient);
+		&*diagOpts, diagPrinter);
 
-	// Clang compiler instance
-	clang::CompilerInstance compiler;
-	compiler.createDiagnostics(diagClient, false);
+	CI.createDiagnostics(diagPrinter, false);
 
-	// Args: pretend like clang++
-	std::vector<std::string> args = {
-		"clang++", "-std=c++17", "-O2", "-fno-exceptions", "-fno-rtti"
+	std::vector<const char*> args = {
+		"clang++", "-xc++", "-std=c++20"
 	};
 
-	// Wrap the source in memory buffer
 	auto buffer = llvm::MemoryBuffer::getMemBuffer(sourceCode, "<jit-input>");
+	clang::EmitLLVMOnlyAction action;
+	
+	std::unique_ptr<llvm::Module> M = action.takeModule();
+	if (!M) throw std::runtime_error("no module");
 
-	// Create CodeGen action (emits LLVM IR Module)
-	std::unique_ptr<clang::CodeGenAction> action(new clang::EmitLLVMOnlyAction());
+	llvm::LoopAnalysisManager LAM;
+	llvm::FunctionAnalysisManager FAM;
+	llvm::CGSCCAnalysisManager CGAM;
+	llvm::ModuleAnalysisManager MAM;
 
-	bool success = clang::tooling::runToolOnCode(
-		action.release(), buffer->getBuffer(), args, "<jit-input>", "clang-tool", std::make_shared<clang::PCHContainerOperations>());
+	llvm::PassBuilder PB;
+	PB.registerModuleAnalyses(MAM);
+	PB.registerCGSCCAnalyses(CGAM);
+	PB.registerFunctionAnalyses(FAM);
+	PB.registerLoopAnalyses(LAM);
+	PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-	if (!success) {
-		throw std::runtime_error("Clang frontend failed");
-	}
+	llvm::ModulePassManager MPM;
+	MPM = PB.buildPerModuleDefaultPipeline(OX); // or O2, Os, Oz
 
-	// Take ownership of the Module
-	std::unique_ptr<llvm::Module> module = action->takeModule();
-	if (!module) {
-		throw std::runtime_error("No module produced by Clang");
-	}
+	MPM.run(*M, MAM);
 
-	// Create global JIT if not already
-	if (!GlobalJIT) {
-		auto jit = cantFail(LLJITBuilder().create());
-		GlobalJIT = std::move(jit);
-	}
+	// Suppose action produced `std::unique_ptr<llvm::Module> M`
+	std::unique_ptr<llvm::Module> M = action.takeModule();
 
-	// Wrap in ThreadSafeModule
-	auto TSM = llvm::orc::ThreadSafeModule(std::move(module),
-		std::make_unique<llvm::LLVMContext>());
+	auto jit = cantFail(LLJITBuilder().create());
+	auto TSM = orc::ThreadSafeModule(std::move(M), std::make_unique<LLVMContext>());
+	cantFail(jit->addIRModule(std::move(TSM)));
 
-	// Add to JIT
-	cantFail(GlobalJIT->addIRModule(std::move(TSM)));
-
-	// Lookup symbol
-	auto sym = cantFail(GlobalJIT->lookup(funcName));
-	return reinterpret_cast<NodeFn>(sym.getAddress());
+	auto sym = cantFail(jit->lookup(funcName));
+	return sym.toPtr<NodeFn>();
 }
 
 uint64_t globalCompileCounter;
@@ -146,8 +145,24 @@ inline void convert(const std::span<ddtype>& data, InputType outboundType, Input
 
 std::span<ddtype> Runner::runClang(const RunnerInput* runnerInputP, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
 {
-	ddtype** outInps = &outerInputs.data()[0]
-	runnerInputP->compiledFunc()
+	int outputSize = runnerInputP->outputNode->getCompileTimeSize(runnerInputP);
+	std::vector<ddtype> result;
+	result.resize(outputSize);
+
+	std::vector<ddtype*> inputPtrs;
+	std::vector<int> inputSizes;
+
+	inputPtrs.reserve(outerInputs.size());
+	inputSizes.reserve(outerInputs.size());
+
+	for (const auto& sp : outerInputs) {
+		inputPtrs.push_back(sp.data());               // pointer to ddtype
+		inputSizes.push_back(static_cast<int>(sp.size())); // length
+	}
+
+	runnerInputP->compiledFunc(result.data(), outputSize, inputPtrs.data(), inputSizes.data(), static_cast<int>(inputPtrs.size()), &userInput);
+
+	return std::span<ddtype>(result);
 }
 
 std::span<ddtype> Runner::run(const RunnerInput* runnerInputP, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
@@ -330,20 +345,85 @@ void storeCopies(RunnerInput& input,
 	}
 }
 
+// Sanitizer for numeric values (ensures finite literal, not NaN/inf)
+inline std::string emitNumericLiteral(double d) {
+	if (!std::isfinite(d)) {
+		return "0.0"; // fallback
+	}
+	char buf[64];
+	std::snprintf(buf, sizeof(buf), "%.17g", d); // precise, portable C99 literal
+	return buf;
+}
+
+// Sanitizer for string values (UI ensures, but double safety here)
+inline std::string sanitizeIdentifier(const std::string& s) {
+	std::string out;
+	out.reserve(s.size());
+	for (char c : s) {
+		if ((c >= 'a' && c <= 'z') ||
+			(c >= 'A' && c <= 'Z') ||
+			(c >= '0' && c <= '9') ||
+			c == '_') {
+			out.push_back(c);
+		}
+	}
+	if (out.empty() || std::isdigit(out[0])) {
+		out = "_" + out; // must be valid identifier
+	}
+	return out;
+}
+
+// Format double as safe numeric literal for C++ source
+inline std::string emitNumericLiteral(double d) {
+	if (!std::isfinite(d)) {
+		return "0.0"; // fallback if NaN or inf
+	}
+	char buf[64];
+	std::snprintf(buf, sizeof(buf), "%.17g", d); // precise, portable
+	return buf;
+}
+
+
 juce::String Runner::initializeClang(const RunnerInput& input, const class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs) {
 	juce::String emitCode;
 	std::unordered_map<NodeData*, int> nodeFieldVars;
-	{
-		int i = 0;
-		
-		for (auto nd : input.nodesOrder) {
-			int count = nd->getCompileTimeSize(&input);
-			nodeFieldVars.insert({ nd, i});
-			emitCode << "ddtype " << "field" << juce::String(i) << "[" << juce::String(count) << "]"  << ";\n";
-			emitCode << "int size" << juce::String(i++) << " = " << juce::String(count) << ";\n";
+	std::unordered_map<std::string, GlobalClangVar> varDeclarations;
+	int i = 0;
+
+	for (auto nd : input.nodesOrder) {
+		int count = nd->getCompileTimeSize(&input);
+		nodeFieldVars.insert({ nd, i });
+
+		emitCode << "ddtype field" << juce::String(i)
+			<< "[" << juce::String(count) << "];\n";
+		emitCode << "int size" << juce::String(i++)
+			<< " = " << juce::String(count) << ";\n";
+
+		for (auto& gv : nd->getType()->globalVarNames(*nd, i)) {
+			std::string sanitized = sanitizeIdentifier(gv.varName);
+
+			if (varDeclarations.find(sanitized) != varDeclarations.end()) {
+				// Duplicate detected -> skip or log
+				// For safety, skip silently here:
+				continue;
+			}
+
+			GlobalClangVar safeVar = gv;
+			safeVar.varName = sanitized;
+			varDeclarations.insert({ sanitized, safeVar });
 		}
+
+		i += 1;
 	}
 
+	for (const auto& [k, gv] : varDeclarations) {
+		emitCode << (gv.isStatic ? "static " : "")
+			<< gv.type << " "
+			<< gv.varName << ";\n";
+	}
+
+
+	i = 0;
 	for (const auto nd : input.nodesOrder) { 
 		{
 			const auto i = nodeFieldVars.at(nd);
@@ -354,7 +434,24 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 			else {
 				emitCode << "{ ddtype* o = output;\n int osize = outputSize;\n";
 			}
-			
+			for (const auto& [c, d] : nd->getNumericProperties()) {
+				std::string sanitizedKey = sanitizeIdentifier(c);  // ensure name is valid
+				emitCode << "double n_" << sanitizedKey << " = "
+					<< emitNumericLiteral(d) << ";\n";
+			}
+
+			for (const auto& [k, v] : nd->getProperties()) {
+				emitCode << "const char* s_" << k << " = \"" << v << "\";\n";
+			}
+			if (!nd->optionalStoredAudio.empty()) {
+				emitCode << "const ddtype stores[" << nd->optionalStoredAudio.size() << "] = {";
+				for (size_t idx = 0; idx < nd->optionalStoredAudio.size(); ++idx) {
+					auto d = nd->optionalStoredAudio[idx];
+					if (idx > 0) emitCode << ", ";
+					emitCode << "{ .i = " << d.i << "LL }";
+				}
+				emitCode << "};\n";
+			}
 		}
 		if (nd->getType()->isInputNode) {
 			// If input pin j comes from an input node:
@@ -439,12 +536,13 @@ juce::String Runner::initializeClang(const RunnerInput& input, const class Scene
 				}
 			}
 		}
-		emitCode << nd->getType()->emitCode << "}\n\n";
+		emitCode << nd->getType()->emitCode(*nd,i) << "}\n\n";
+		i += 1;
 	}
 }
 
 const juce::String clangHeader(uint64_t x) {
-	return ddtypeClangJ + UserInputClangJ + "#include <math.h>\nvoid nodeTypeOutput" + juce::String(x) + "(ddtype* output, int outputSize, ddtype** inputs, int* inputSizes, int numInputs) {";
+	return ddtypeClangJ + UserInputClangJ + "#include <cmath>\n#include <cstdlib>\nextern \"C\" void nodeTypeOutput" + juce::String(x) + "(ddtype * output, int outputSize, ddtype * *inputs, int* inputSizes, int numInputs) { ";
 }
 const juce::String clangCloser = "}";
 
@@ -486,8 +584,28 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::v
 	juce::String clangCode = initializeClang(input, scene, outerInputs);
 
 	input.clangcode = (clangHeader(globalCompileCounter) + clangCode + clangCloser).toStdString();
-
-	input.compiledFunc = compileNodeKernel(input.clangcode, (juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString());
+	llvm::OptimizationLevel OX;
+	switch (input.optLevel) {
+	case OptLevel::high:
+		OX = llvm::OptimizationLevel::O3;
+		break;
+	case OptLevel::medium:
+		OX = llvm::OptimizationLevel::O2;
+		break;
+	case OptLevel::low:
+		OX = llvm::OptimizationLevel::O1;
+		break;
+	case OptLevel::minimal:
+		OX = llvm::OptimizationLevel::O0;
+		break;
+	case OptLevel::prioritizeSize:
+		OX = llvm::OptimizationLevel::Oz;
+		break;
+	case OptLevel::tradeOffSize:
+		OX = llvm::OptimizationLevel::Os;
+		break;
+	}
+	input.compiledFunc = compileNodeKernel(input.clangcode, (juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString(), OX);
 
 	UserInput fakeInput;
 	std::vector<NodeData*> tempNodesOrder;

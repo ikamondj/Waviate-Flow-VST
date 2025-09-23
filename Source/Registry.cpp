@@ -1879,6 +1879,10 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                 const double y = in[1].empty() ? 1.0 : in[1][0].d;
                 for (int i = 0; i < (int)x.size(); ++i) out[i] = std::pow(std::abs(x[i].d), y);
             };
+        t.emitCode = [](NodeData& nd, int) {
+            return "const double y = isize1 == 0 ? 1.0 : i1[0].d;"
+                "for (int i = 0; i < isize0; i += 1) { o[i] = std::pow(std::abs(i0[i].d), y);}";
+        };
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr;
         registry.push_back(t);
         // Hotkey: caret (Shift+6)
@@ -2677,8 +2681,11 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
 		t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
 		t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput&) {
             out[0].d = in[1][0].d * in[0][0].d;
+            double* pastSamples = u.isStereoRight ? u.rightInputHistoryArray : u.leftInputHistoryArray;
+            int head = u.isStereoRight ? u.rightInputHistoryHead : u.leftInputHistoryHead;
+            int count = u.isStereoRight ? u.rightInputHistorySize : u.leftInputHistorySize;
             for (int i = 1; i < in[1].size(); i += 1) {
-				out[0].d += in[1][i].d * u.getHistoricalSample(i - 1);
+				out[0].d += in[1][i].d * CircleBuffer_get(pastSamples, head, count, i - 1);
             }
 		};
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = true; t.fromScene = nullptr; registry.push_back(t);
@@ -2695,9 +2702,12 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             double n = in[0].empty() ? 0.0 : in[1][0].d * maxFilter;
             n = std::max(1.0, std::min(n, maxFilter));
             double sum = in[0][0].d;
+            double* pastSamples = u.isStereoRight ? u.rightInputHistoryArray : u.leftInputHistoryArray;
+            int head = u.isStereoRight ? u.rightInputHistoryHead : u.leftInputHistoryHead;
+            int count = u.isStereoRight ? u.rightInputHistorySize : u.leftInputHistorySize;
             for (int i = 0; i < n; i += 1) {
                 double v = (1.0 * n - i >= 1) + (n - i) * (n - i < 1);
-                sum += u.getHistoricalSample(i) * v;
+                sum += CircleBuffer_get(pastSamples, head, count, i) * v;
             }
             out[0].d = sum / n;
         };
@@ -2711,11 +2721,16 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         t.inputs = { InputFeatures("indices", InputType::integer, 0, false) }; t.getOutputSize = outputSizeEqualsSingleInputSize;
         t.buildUI = [](NodeComponent& nc, NodeData& nd) {};
         t.execute = [](const NodeData&, UserInput& u, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput&) {
+            double* pastSamples = u.isStereoRight ? u.rightInputHistoryArray : u.leftInputHistoryArray;
+            int head = u.isStereoRight ? u.rightInputHistoryHead : u.leftInputHistoryHead;
+            int count = u.isStereoRight ? u.rightInputHistorySize : u.leftInputHistorySize;
             for (int i = 0; i < in[0].size(); i += 1) {
                 int64_t idx = in[0][i].i;
-                out[i] = u.getHistoricalSample(idx);
+
+                out[i] = CircleBuffer_get(pastSamples, head, count, idx);
             }
-            };
+
+        };
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = true; t.fromScene = nullptr; registry.push_back(t);
     }
 
@@ -2737,6 +2752,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                 }
             }
         };
+        t.emitCode = "v" + juce::String(;
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
 
@@ -2751,6 +2767,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             int key = in[0][0].i;
 			out[0].d = u.storeableValues.contains(key) ? u.storeableValues.at(key) : 0.0;
         };
+
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = true; t.fromScene = nullptr; registry.push_back(t);
     }
 
@@ -2822,6 +2839,17 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                 } 
                 out[0].i = idx;
             }
+        };
+        t.emitCode = [](NodeData& nd, int ord) {
+            return "o[0].i = 0;"
+                "int64_t idx = 0;"
+                "double best = i0[0].d;"
+                "for (int i = 0; i < isize0; ++i) {"
+                "   if (i0[i].d < best) {"
+                "       best = i0[i].d; idx = i;"
+                "       o[0].i = idx"
+                "   }"
+                "}";
         };
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
@@ -3002,17 +3030,28 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
             comp.addAndMakeVisible(back);
             };
         t.execute = [](const NodeData& node, UserInput& u, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput& r) {
-            out[0].d = in[1][0].d;
-            if (&r == u.runner) {
-                auto key = node.getStringProperty("name");
-                if (u.namedValues.contains(key)) {
-                    u.namedValues[key] = in[1][0].d;
-                }
-                else {
-                    u.namedValues.insert({ key, in[1][0].d });
-                }
-            }
-            };
+            out[0].d = in[0][0].d;
+            //auto key = node.getStringProperty("name");
+            //if (u.namedValues.contains(key)) {
+            //    u.namedValues[key] = in[0][0].d;
+            //}
+            //else {
+            //    u.namedValues.insert({ key, in[0][0].d });
+            //}
+        };
+        t.emitCode = [](NodeData& nd, int uniqueNodeOrder) {
+            return ("v" + juce::String(uniqueNodeOrder) + nd.getStringProperty("name") + " = i0[0].d;").toStdString();
+        };
+        t.globalVarNames = [](NodeData& nd, int uniqueNodeOrder) {
+            std::vector<GlobalClangVar> globVars;
+            globVars.push_back(("static double v" + juce::String(uniqueNodeOrder) + nd.getStringProperty("name") + ";").toStdString());
+            GlobalClangVar var;
+            var.isStatic = true;
+            var.type = "double";
+            var.name = ("v" + juce::String(uniqueNodeOrder) + nd.getStringProperty("name")).toStdString();
+            globVars.push_back(var);
+            return globVars;
+        };
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = false; t.fromScene = nullptr; registry.push_back(t);
     }
 
@@ -3044,7 +3083,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
         };
         t.execute = [](const NodeData& node, UserInput& u, const std::vector<std::span<ddtype>>& in, std::span<ddtype> out, const RunnerInput&) {
             auto key = node.getStringProperty("name");
-            out[0].d = u.namedValues.contains(key) ? u.namedValues.at(key) : 0.0;
+            //out[0].d = u.namedValues.contains(key) ? u.namedValues.at(key) : 0.0;
         };
         t.outputType = InputType::decimal; t.alwaysOutputsRuntimeData = true; t.fromScene = nullptr; registry.push_back(t);
     }
@@ -3503,7 +3542,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                 {
                     int cc = ccIdx[i].i;
                     float val = 0.0f;
-                    if (cc >= 0 && cc < (int)userInput.midiCCValues.size())
+                    if (cc >= 0 && cc < 128)
                         val = userInput.midiCCValues[cc];
                     out[i].d = val; // already normalized 0..1
                 }
@@ -3540,7 +3579,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistry()
                 {
                     int pi = idx[i].i;
                     float val = 0.0f;
-                    if (pi >= 0 && pi < params.size())
+                    if (pi >= 0 && pi < userInput.dawParamCount)
                         val = params[pi]; // already normalized 0..1
                     out[i].d = val;
                 }

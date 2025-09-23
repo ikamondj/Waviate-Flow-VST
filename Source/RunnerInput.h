@@ -15,9 +15,10 @@
 #include <unordered_set>
 #include <vector>
 #include "ddtype.h"
+#include "OptLevel.h"
 
 using NodeFn = void(*)(ddtype* output, int outputSize,
-    ddtype** inputs, int* inputSizes, int numInputs);
+    ddtype** inputs, int* inputSizes, int numInputs, struct UserInput* u);
 
 class NodeData;
 class RunnerInput {
@@ -33,5 +34,6 @@ public:
     std::unordered_map<NodeData*, NodeData*> remap;
     std::string clangcode;
     NodeFn compiledFunc;
+    OptLevel optLevel = OptLevel::medium;
     NodeData* outputNode = nullptr;
 };

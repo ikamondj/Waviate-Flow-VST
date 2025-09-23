@@ -3321,6 +3321,9 @@
     <ClInclude Include="..\..\Source\UserSessionManager.h">
       <Filter>WaviateFlow2025\Source\Network</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Source\OptLevel.h">
+      <Filter>WaviateFlow2025\Source\Core</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\Source\SceneData.h">
       <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClInclude>

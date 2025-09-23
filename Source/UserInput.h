@@ -10,6 +10,7 @@
 #pragma once
 #define MIDI_NOTE_COUNT 128
 #define CIRCLEBUFFER_CAPACITY 480000
+#define DAW_PARAM_SIZE 1024
 #include "StringifyDefines.h"
 
 DEFINE_AND_CREATE_VAR(
@@ -18,7 +19,7 @@ DEFINE_AND_CREATE_VAR(
     *count = 0;
 }
 
-static inline void CircleBuffer_add(double* data,
+inline void CircleBuffer_add(double* data,
     int* head,
     int* count,
     double value) {
@@ -29,26 +30,26 @@ static inline void CircleBuffer_add(double* data,
     }
 }
 
-static inline int CircleBuffer_size(const int* count) {
+inline int CircleBuffer_size(const int* count) {
     return *count;
 }
 
-static inline int CircleBuffer_capacity(void) {
+inline int CircleBuffer_capacity(void) {
     return CIRCLEBUFFER_CAPACITY;
 }
 
-static inline double CircleBuffer_get(const double* data,
-    const int* head,
-    const int* count,
+inline double CircleBuffer_get(const double* data,
+    const int head,
+    const int count,
     int indexAgo) {
-    if (indexAgo >= *count) {
+    if (indexAgo >= count) {
         return 0.0;
     }
-    int idx = (*head + CIRCLEBUFFER_CAPACITY - 1 - indexAgo) % CIRCLEBUFFER_CAPACITY;
+    int idx = (head + CIRCLEBUFFER_CAPACITY - 1 - indexAgo) % CIRCLEBUFFER_CAPACITY;
     return data[idx];
 }
 
-typedef struct
+struct UserInput
 {
     double notesOn[MIDI_NOTE_COUNT];
     double noteStartFrame[MIDI_NOTE_COUNT];
@@ -57,7 +58,8 @@ typedef struct
     double controllerValues[MIDI_NOTE_COUNT];
     double noteHz[MIDI_NOTE_COUNT];
     double noteCycle[MIDI_NOTE_COUNT];
-    double dawParams[MIDI_NOTE_COUNT];
+    double dawParams[DAW_PARAM_SIZE];
+    const int dawParamCount = DAW_PARAM_SIZE;
     int midiCCValues[MIDI_NOTE_COUNT];
     double pitchWheelValue;
     double modWheelValue;
@@ -86,11 +88,10 @@ typedef struct
     //double getHistoricalSample(int samplesAgo) const;
     //std::unordered_map<juce::String, double> namedValues;
     //std::unordered_map<int, double> storeableValues;
-
-} UserInput;
+};
 
 
 , UserInputClang
-)
+);
 
 const juce::String UserInputClangJ(UserInputClang);

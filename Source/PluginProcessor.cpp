@@ -203,7 +203,6 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         const RunnerInput* prevRunner = nullptr;
 
         runner = getCurrentRunner();
-        userInput.runner = runner;
         prevRunner = getPreviousRunner();
 
         const int fadeWindowSamples = int(fadeWindowSeconds * sampleRate);
@@ -229,7 +228,7 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
                 hasEvent = it.getNextEvent(msg, eventSample);
             }
 
-            for (int i = 0; i < userInput.notesOn.size(); i += 1) {
+            for (int i = 0; i < 128; i += 1) {
                 userInput.noteCycle[i] = std::fmod(userInput.noteCycle[i] +
                     noteHzOfficialValues[i] * timePerSample, 1.0);
             }
@@ -263,9 +262,8 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
                         outR[sample] += d.d * beta;
                     }
                 }
-
-                userInput.rightInputHistory.add(outR[sample] = 10.0 * std::tanh(outR[sample] * 0.1));
-                userInput.leftInputHistory.add(outL[sample] = 10.0 * std::tanh(outL[sample] * 0.1));
+                CircleBuffer_add(userInput.rightInputHistoryArray, &userInput.rightInputHistoryHead, &userInput.rightInputHistorySize, outR[sample] = 10.0 * std::tanh(outR[sample] * 0.1));
+                CircleBuffer_add(userInput.leftInputHistoryArray, &userInput.leftInputHistoryHead, &userInput.leftInputHistorySize, outL[sample] = 10.0 * std::tanh(outL[sample] * 0.1));
                 auto sc = dynamic_cast<SceneComponent*>(audibleScene);
                 if (sc) {
                     dynamic_cast<juce::AudioVisualiserComponent*>(sc->nodes[0]->inputGUIElements[0].get())->pushSample(&outL[sample], 1);

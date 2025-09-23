@@ -36,6 +36,7 @@
               file="Source/UserSessionManager.h"/>
       </GROUP>
       <GROUP id="{37CAC29E-88E6-DD01-B2F8-3A6590B52EBF}" name="Core">
+        <FILE id="Scb39D" name="OptLevel.h" compile="0" resource="0" file="Source/OptLevel.h"/>
         <FILE id="L0Mguv" name="SceneData.cpp" compile="1" resource="0" file="Source/SceneData.cpp"/>
         <FILE id="ixrTCW" name="SceneData.h" compile="0" resource="0" file="Source/SceneData.h"/>
         <FILE id="WRcyQK" name="InputType.h" compile="0" resource="0" file="Source/InputType.h"/>

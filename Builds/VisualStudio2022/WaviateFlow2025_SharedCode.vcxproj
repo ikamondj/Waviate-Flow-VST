@@ -2581,6 +2581,7 @@
     <ClInclude Include="..\..\Source\RestAPIHandler.h"/>
     <ClInclude Include="..\..\Source\UserData.h"/>
     <ClInclude Include="..\..\Source\UserSessionManager.h"/>
+    <ClInclude Include="..\..\Source\OptLevel.h"/>
     <ClInclude Include="..\..\Source\SceneData.h"/>
     <ClInclude Include="..\..\Source\InputType.h"/>
     <ClInclude Include="..\..\Source\ddtype.h"/>
