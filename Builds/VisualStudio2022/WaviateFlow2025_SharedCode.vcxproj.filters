@@ -8,6 +8,9 @@
     <Filter Include="WaviateFlow2025\Source\Network">
       <UniqueIdentifier>{BF1A0743-8000-0EA9-33BF-0CFC3C755A27}</UniqueIdentifier>
     </Filter>
+    <Filter Include="WaviateFlow2025\Source\Core\BuiltInNodeTypes">
+      <UniqueIdentifier>{BDB53754-BF97-2D9A-3180-E73D1232B2E2}</UniqueIdentifier>
+    </Filter>
     <Filter Include="WaviateFlow2025\Source\Core\Utils">
       <UniqueIdentifier>{4055CD8A-76CD-4AE3-5D73-5FFE69AB89B1}</UniqueIdentifier>
     </Filter>
@@ -657,6 +660,21 @@
     </ClCompile>
     <ClCompile Include="..\..\Source\UserSessionManager.cpp">
       <Filter>WaviateFlow2025\Source\Network</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\DawTypes.cpp">
+      <Filter>WaviateFlow2025\Source\Core\BuiltInNodeTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\IntegralTypes.cpp">
+      <Filter>WaviateFlow2025\Source\Core\BuiltInNodeTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\MathTypes.cpp">
+      <Filter>WaviateFlow2025\Source\Core\BuiltInNodeTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\MidiTypes.cpp">
+      <Filter>WaviateFlow2025\Source\Core\BuiltInNodeTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\VectorTypes.cpp">
+      <Filter>WaviateFlow2025\Source\Core\BuiltInNodeTypes</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Source\SceneData.cpp">
       <Filter>WaviateFlow2025\Source\Core</Filter>
@@ -3358,6 +3376,9 @@
       <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\NodeType.h">
+      <Filter>WaviateFlow2025\Source\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Source\Registry.h">
       <Filter>WaviateFlow2025\Source\Core</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Source\Runner.h">

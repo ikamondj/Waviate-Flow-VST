@@ -114,6 +114,7 @@ void WaviateFlow2025AudioProcessor::prepareToPlay (double sampleRate, int sample
 {
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
+    dbuff = juce::AudioBuffer<double>(getTotalNumOutputChannels(), samplesPerBlock);
 }
 
 void WaviateFlow2025AudioProcessor::releaseResources()
@@ -148,9 +149,7 @@ bool WaviateFlow2025AudioProcessor::isBusesLayoutSupported(const BusesLayout& la
     return true;
 }
 
-
-void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
-{
+void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) {
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -160,7 +159,7 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     auto mainIn = getBusBuffer(buffer, true, 0); // main input bus
     auto mainOut = getBusBuffer(buffer, false, 0); // main output bus
 
-    juce::MidiBuffer::Iterator it(midiMessages);
+    juce::MidiBuffer::Iterator it(midi);
     juce::MidiMessage msg;
     int eventSample;
     bool hasEvent = it.getNextEvent(msg, eventSample);
@@ -169,7 +168,7 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     const int numOutCh = mainOut.getNumChannels();
 
     // --- Safe sidechain acquisition ---
-    juce::AudioBuffer<float> sidechainIn;
+    juce::AudioBuffer<double> sidechainIn;
     int numSInCh = 0;
     if (getBusCount(true) > 1) // sidechain bus exists
     {
@@ -180,18 +179,18 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     auto editor = dynamic_cast<WaviateFlow2025AudioProcessorEditor*>(getActiveEditor());
 
     // Pointers to the actual INPUT audio
-    const float* inL = (numInCh > 0) ? mainIn.getReadPointer(0) : nullptr;
-    const float* inR = (numInCh > 1) ? mainIn.getReadPointer(1)
+    const double* inL = (numInCh > 0) ? mainIn.getReadPointer(0) : nullptr;
+    const double* inR = (numInCh > 1) ? mainIn.getReadPointer(1)
         : (numInCh > 0 ? mainIn.getReadPointer(0) : nullptr);
 
-    const float* inSL = (numSInCh > 0) ? sidechainIn.getReadPointer(0) : nullptr;
-    const float* inSR = (numSInCh > 1) ? sidechainIn.getReadPointer(1)
+    const double* inSL = (numSInCh > 0) ? sidechainIn.getReadPointer(0) : nullptr;
+    const double* inSR = (numSInCh > 1) ? sidechainIn.getReadPointer(1)
         : (numSInCh > 0 ? sidechainIn.getReadPointer(0) : nullptr);
 
     const double timePerSample = 1.0 / sampleRate;
 
     if (numOutCh > 0) {
-        float* outR, * outL;
+        double* outR, * outL;
         outR = outL = mainOut.getWritePointer(0);
         if (numOutCh > 1) {
             outR = mainOut.getWritePointer(1);
@@ -266,9 +265,10 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
                 userInput.rightInputHistory.add(outR[sample] = 10.0 * std::tanh(outR[sample] * 0.1));
                 userInput.leftInputHistory.add(outL[sample] = 10.0 * std::tanh(outL[sample] * 0.1));
+                float z = outL[sample];
                 auto sc = dynamic_cast<SceneComponent*>(audibleScene);
                 if (sc) {
-                    dynamic_cast<juce::AudioVisualiserComponent*>(sc->nodes[0]->inputGUIElements[0].get())->pushSample(&outL[sample], 1);
+                    dynamic_cast<juce::AudioVisualiserComponent*>(sc->nodes[0]->inputGUIElements[0].get())->pushSample(&z, 1);
                 }
             }
         }
@@ -282,6 +282,22 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
     //totalSamplesProcessed.fetch_add(buffer.getNumSamples(), std::memory_order_relaxed);
     userInput.numFramesStartOfBlock += buffer.getNumSamples();
+}
+
+void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
+{
+    
+    for (int i = 0; i < buffer.getNumChannels(); i += 1) {
+        for (int j = 0; j < buffer.getNumSamples(); j += 1) {
+            dbuff.setSample(i, j, (double)buffer.getSample(i, j));
+        }
+    }
+    processBlock(dbuff, midiMessages);
+    for (int i = 0; i < dbuff.getNumChannels(); i += 1) {
+        for (int j = 0; j < dbuff.getNumSamples(); j += 1) {
+            buffer.setSample(i, j, (float)dbuff.getSample(i, j));
+        }
+    }
 }
 
 
@@ -441,6 +457,7 @@ void WaviateFlow2025AudioProcessor::setActiveScene(SceneComponent* scene, bool s
     if (auto editor = getCurrentEditor()) {
         editor->browser.repaint();
         editor->setActiveScene(scene, shouldOpen);
+        displaySceneName();
     }
 }
 
@@ -496,5 +513,12 @@ void WaviateFlow2025AudioProcessor::initializeAllScenes()
     for (auto& scene : scenes) {
         Runner::initialize(*scene, scene.get(), std::vector<std::span<ddtype>>());
     }
+    displaySceneName();
 }
 
+void WaviateFlow2025AudioProcessor::displaySceneName() {
+    if (auto ed = getCurrentEditor()) {
+        ed->activeSceneName.setText(activeScene->getSceneName() + (activeScene->currentStateIsSaved ? "" : "*"), juce::NotificationType::sendNotification);
+        ed->activeSceneName.toFront(false);
+    }
+}

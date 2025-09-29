@@ -44,6 +44,7 @@ public:
     juce::Component canvas;
     juce::StretchableLayoutManager horizontalLayout;
     juce::StretchableLayoutResizerBar resizerBar;
+    juce::Label activeSceneName;
     
     std::vector<class PropertiesMenu*> propertiesMenus;
     void setActivePropertyMenu(int index);

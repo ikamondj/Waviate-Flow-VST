@@ -52,14 +52,24 @@ void ScenePropertiesComponent::attachCallbacks()
 {
     nameEditor.onTextChange = [this]
         {
-            if (activeSceneData != nullptr)
-                activeSceneData->setSceneName(nameEditor.getText().toStdString());
+            if (activeSceneData != nullptr) {
+                auto newname = nameEditor.getText().toStdString();
+                if (activeSceneData->getSceneName() != newname) {
+                    activeSceneData->setSceneName(newname);
+                    activeSceneData->processorRef->displaySceneName();
+                }
+            }
         };
 
     addressEditor.onTextChange = [this]
         {
-            if (activeSceneData != nullptr)
-                activeSceneData->customNodeType.address = addressEditor.getText().toStdString();
+            if (activeSceneData != nullptr) {
+                auto newname = addressEditor.getText();
+                if (newname != activeSceneData->customNodeType.address) {
+                    activeSceneData->customNodeType.address = addressEditor.getText();
+                    activeSceneData->processorRef->displaySceneName();
+                }
+            }
         };
 
     publishToMarketplaceButton.onClick = [this]

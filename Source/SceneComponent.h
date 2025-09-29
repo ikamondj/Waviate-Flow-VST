@@ -70,8 +70,10 @@ public:
     double logScale = 0;
     juce::PopupMenu buildNodeTypeMenuCache();
     juce::PopupMenu buildNodeTypeMenuCache(std::function<bool(const NodeType&)> condition);
+    bool currentStateIsSaved;
 private:
     void buildMenuRecursive(juce::PopupMenu& menu, const struct MenuNode& node, std::function<bool(const NodeType&)> condition);
     bool drawReady = false;
+    
     NodeComponent* highlightedNode;
 };

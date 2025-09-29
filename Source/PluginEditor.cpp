@@ -38,6 +38,9 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
     addAndMakeVisible(addButton);
     addAndMakeVisible(nameSceneBox);
     addAndMakeVisible(removeButton);
+    addAndMakeVisible(activeSceneName);
+
+    activeSceneName.setJustificationType(juce::Justification::topRight);
 
     nameSceneBox.setJustification(juce::Justification::centred);
     nameSceneBox.setEnabled(false);
@@ -135,8 +138,12 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
         }
     }
     
+    
+
     setSize(800, 600);
     startTimerHz(60);
+
+    p.displaySceneName();
 }
 
 WaviateFlow2025AudioProcessorEditor::~WaviateFlow2025AudioProcessorEditor()
@@ -177,6 +184,8 @@ void WaviateFlow2025AudioProcessorEditor::resized()
             y += 50;
         }
     }
+    activeSceneName.setSize(getWidth()  / 8.0, 20);
+    activeSceneName.setTopLeftPosition(getWidth() - getWidth() / 8.0, 0);
 }
 
 int WaviateFlow2025AudioProcessorEditor::getNodeTypeId(const juce::String& name) const

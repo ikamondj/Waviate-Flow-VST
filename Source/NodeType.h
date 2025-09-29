@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <span>
+#include <limits>
 #include "NodeData.h"
 #include "InputType.h"
 #include "ddtype.h"
@@ -19,9 +20,9 @@ struct InputFeatures {
     /// <param name="reqCompileTime">Whether the input requires compile-time knowledge.</param>
 	InputFeatures(const juce::String& n, InputType, int requiredSize, bool reqCompileTime);
     juce::String name;
+    double minVal = -std::numeric_limits<double>::infinity();
+    double maxVal = std::numeric_limits<double>::infinity();
     InputType inputType = InputType::decimal;
-    bool isBoolean();
-    bool isInt();
     int requiredSize;
     bool requiresCompileTimeKnowledge;
     ddtype defaultValue = 0.0;
@@ -57,7 +58,7 @@ struct NodeType {
     NodeType(uint64_t nodeId);
     NodeType(uint64_t userId, uint64_t nodeId, class WaviateFlow2025AudioProcessor&);
     int whichInputToFollowWildcard = -1;
-	static NodeType& getConversionType(InputType from, InputType to);
+    inline static uint64_t registryCreatePrefix;
     ~NodeType();
 };
 
