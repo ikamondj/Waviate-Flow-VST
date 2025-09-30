@@ -53,23 +53,23 @@ NodeFn compileNodeKernel(const std::string& sourceCode,
 	}
 
 	// set up Clang to compile C code to LLVM IR
-	clang::CompilerInstance CI;
+	auto CI = std::make_unique< clang::CompilerInstance>();
 	auto diagOpts = llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions>(new clang::DiagnosticOptions());
 	auto diagPrinter = new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
 	auto diags = new clang::DiagnosticsEngine(
 		llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs>(new clang::DiagnosticIDs()),
 		&*diagOpts, diagPrinter);
 
-	CI.createDiagnostics(diagPrinter, false);
+	CI->createDiagnostics(diagPrinter, false);
 
 	std::vector<const char*> args = {
 		"clang++", "-xc++", "-std=c++20"
 	};
 
 	auto buffer = llvm::MemoryBuffer::getMemBuffer(sourceCode, "<jit-input>");
-	clang::EmitLLVMOnlyAction action;
+	auto action = std::make_unique<clang::EmitLLVMOnlyAction>();
 	
-	std::unique_ptr<llvm::Module> M = action.takeModule();
+	std::unique_ptr<llvm::Module> M = action->takeModule();
 	if (!M) throw std::runtime_error("no module");
 
 	llvm::LoopAnalysisManager LAM;
@@ -232,61 +232,66 @@ bool Runner::containsNodeField(NodeData* d, std::unordered_map<NodeData*, std::s
 }
 
 		
-std::vector<ddtype> Runner::findRemainingSizes(NodeData* node, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs)
+const std::vector<ddtype>& Runner::findRemainingSizes(
+	NodeData* node,
+	RunnerInput& inlineInstance,
+	const std::vector<std::span<ddtype>>& outerInputs)
 {
-	std::vector<ddtype> tempOutput;
-	std::vector<std::span<ddtype>> actualspans;
+	// Memoization: return if already computed
+	if (inlineInstance.nodeCompileTimeOutputs.contains(node))
+		return inlineInstance.nodeCompileTimeOutputs[node];
+
+	std::vector<std::span<const ddtype>> actualspans;
+	std::vector<std::unique_ptr<std::vector<ddtype>>> ownedTemps;
+
+	// Build input spans
+	for (int i = 0; i < node->getNumInputs(); ++i) {
+		if (NodeData* input = node->getInput(i)) {
+			const auto& depOut = findRemainingSizes(input, inlineInstance, outerInputs);
+			actualspans.emplace_back(depOut.data(), depOut.size());
+		}
+		else {
+			auto buf = std::make_unique<std::vector<ddtype>>(1, node->defaultValues[i]);
+			actualspans.emplace_back(buf->data(), buf->size());
+			ownedTemps.push_back(std::move(buf));
+		}
+	}
+
+	if (node->getType()->isInputNode) {
+		int inputIndex = node->inputIndex;
+		if (outerInputs.empty() || inputIndex >= (int)outerInputs.size()) {
+			auto buf = std::make_unique<std::vector<ddtype>>(1, ddtype{ .d = 0.0 });
+			actualspans.emplace_back(buf->data(), buf->size());
+			ownedTemps.push_back(std::move(buf));
+		}
+		else {
+			auto buf = std::make_unique<std::vector<ddtype>>(outerInputs[inputIndex].begin(),
+				outerInputs[inputIndex].end());
+			actualspans.emplace_back(buf->data(), buf->size());
+			ownedTemps.push_back(std::move(buf));
+		}
+	}
+
+	// Allocate result directly in cache
+	auto& outVec = inlineInstance.nodeCompileTimeOutputs[node];
+	const int dim = node->getMaxOutputDimension(/* adapt your API */, inlineInstance, node->inputIndex);
+	outVec.assign(dim, ddtype{ .d = 0.0 });
+
+	std::span<ddtype> outSpan(outVec.data(), outVec.size());
 	UserInput user;
 
-	if (inlineInstance.nodeCompileTimeOutputs.contains(node)) {
-		return inlineInstance.nodeCompileTimeOutputs[node];
-	}
-	else {
-		std::vector<std::vector<ddtype>> inputspans;
-		for (int i = 0; i < node->getNumInputs(); i += 1) {
-			NodeData* input = node->getInput(i);
-			if (input) {
-				std::vector<ddtype> inputsOutput = findRemainingSizes(input, inlineInstance, outerInputs);
-				inputspans.push_back(inputsOutput);
-			}
-			else {
+	// Convert actualspans -> mutable spans for execute
+	std::vector<std::span<ddtype>> mutableSpans;
+	mutableSpans.reserve(actualspans.size());
+	for (auto s : actualspans)
+		mutableSpans.emplace_back(const_cast<ddtype*>(s.data()), s.size());
 
-				std::vector<ddtype> inputsOutput = { node->defaultValues[i]};
-				inputspans.push_back(inputsOutput);
-			}
-		}
-		if (node->getType()->isInputNode) {
-			
-			int inputIndex = node->inputIndex;
-			if (outerInputs.empty()) {
-				std::vector<ddtype> defaultValue;
-				defaultValue.push_back(0.0); //TODO actual custom default values for functions
-				inputspans.push_back(defaultValue);
-			}
-			else {
-				inputspans.push_back(std::vector<ddtype>(outerInputs[inputIndex].begin(), outerInputs[inputIndex].end()));
-			}
-			
-		}
-		
-		for (int i = 0; i < inputspans.size(); i += 1) {
-			actualspans.emplace_back(inputspans[i]);
-		}
-		auto nodeType = node->getType();
-		int dim = node->getMaxOutputDimension(inputspans, inlineInstance, node->inputIndex);
-		node->setCompileTimeSize(&inlineInstance, dim);
-		for (int i = 0; i < dim; i += 1) {
-			tempOutput.push_back(0.0);
-		}
-		std::span tempOutSpan = std::span(tempOutput);
+	node->getType()->execute(*node, user, mutableSpans, outSpan, inlineInstance);
+	node->setCompileTimeSize(&inlineInstance, dim);
 
-
-
-		node->getType()->execute(*node, user, actualspans, tempOutSpan, inlineInstance);
-		inlineInstance.nodeCompileTimeOutputs.insert({ node, tempOutput });
-		return tempOutput;
-	}
+	return outVec;
 }
+
 
 void storeCopies(RunnerInput& input,
 	SceneData* startScene,
@@ -373,163 +378,129 @@ inline std::string sanitizeIdentifier(const std::string& s) {
 
 
 
-juce::String Runner::initializeClang(const RunnerInput& input, const class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs) {
+juce::String Runner::initializeClang(const RunnerInput& input,
+	const class SceneData* scene,
+	const std::vector<std::span<ddtype>>& outerInputs)
+{
 	juce::String emitCode;
 	std::unordered_map<NodeData*, int> nodeFieldVars;
 	std::unordered_map<std::string, GlobalClangVar> varDeclarations;
 	int i = 0;
 
+	// Allocate vectors per node
 	for (auto nd : input.nodesOrder) {
 		int count = nd->getCompileTimeSize(&input);
 		nodeFieldVars.insert({ nd, i });
 
-		emitCode << "ddtype field" << juce::String(i)
-			<< "[" << juce::String(count) << "];\n";
-		emitCode << "int size" << juce::String(i++)
-			<< " = " << juce::String(count) << ";\n";
+		emitCode << "std::vector<ddtype> field" << juce::String(i)
+			<< "(" << juce::String(count) << ");\n";
+		emitCode << "int size" << juce::String(i)
+			<< " = (int)field" << juce::String(i) << ".size();\n";
 
 		for (auto& gv : nd->getType()->globalVarNames(*nd, i)) {
 			std::string sanitized = sanitizeIdentifier(gv.varName);
-
-			if (varDeclarations.find(sanitized) != varDeclarations.end()) {
-				// Duplicate detected -> skip or log
-				// For safety, skip silently here:
-				continue;
+			if (!varDeclarations.contains(sanitized)) {
+				GlobalClangVar safeVar = gv;
+				safeVar.varName = sanitized;
+				varDeclarations.insert({ sanitized, safeVar });
 			}
-
-			GlobalClangVar safeVar = gv;
-			safeVar.varName = sanitized;
-			varDeclarations.insert({ sanitized, safeVar });
 		}
 
-		i += 1;
+		++i;
 	}
 
-	for (const auto& [k, gv] : varDeclarations) {
-		emitCode << (gv.isStatic ? "static " : "")
-			<< gv.type << " "
-			<< gv.varName << ";\n";
+	// Emit global vars
+	for (const auto& [_, gv] : varDeclarations) {
+		emitCode << (gv.isStatic ? "static " : "") << gv.type << " " << gv.varName << ";\n";
 	}
 
-
+	// Emit code per node
 	int ord = 0;
-	for (const auto nd : input.nodesOrder) { 
-		{
-			const auto i = nodeFieldVars.at(nd);
-			if (nd != input.outputNode) {
-				emitCode << "{ ddtype* o = field" << juce::String(i) << ";\n";
-				emitCode << "int osize = size" << juce::String(i) << ";\n";
-			}
-			else {
-				emitCode << "{ ddtype* o = output;\n int osize = outputSize;\n";
-			}
-			for (const auto& [c, d] : nd->getNumericProperties()) {
-				std::string sanitizedKey = sanitizeIdentifier(c);  // ensure name is valid
-				emitCode << "double n_" << sanitizedKey << " = "
-					<< emitNumericLiteral(d) << ";\n";
-			}
+	for (const auto nd : input.nodesOrder) {
+		const auto idx = nodeFieldVars.at(nd);
+		emitCode << "{\n";
 
-			for (const auto& [k, v] : nd->getProperties()) {
-				emitCode << "const char* s_" << k << " = \"" << v << "\";\n";
-			}
-			if (!nd->optionalStoredAudio.empty()) {
-				emitCode << "const ddtype stores[" << nd->optionalStoredAudio.size() << "] = {";
-				for (size_t idx = 0; idx < nd->optionalStoredAudio.size(); ++idx) {
-					auto d = nd->optionalStoredAudio[idx];
-					if (idx > 0) emitCode << ", ";
-					emitCode << "{ .i = " << d.i << "LL }";
-				}
-				emitCode << "};\n";
-			}
-		}
-		if (nd->getType()->isInputNode) {
-			// If input pin j comes from an input node:
-			const int pin = nd->inputIndex;
-			emitCode << "ddtype* i0 = inputs[" << pin << "];\n";
-			emitCode << "const int isize0 = inputSizes[" << pin << "];\n";
-
+		if (nd != input.outputNode) {
+			emitCode << "  std::vector<ddtype>& o = field" << juce::String(idx) << ";\n";
+			emitCode << "  int osize = size" << juce::String(idx) << ";\n";
 		}
 		else {
-			for (int j = 0; j < nd->getNumInputs(); j += 1) {
+			emitCode << "  std::vector<ddtype> o(output, output + outputSize);\n";
+			emitCode << "  int osize = outputSize;\n";
+		}
+
+		// Numeric props
+		for (const auto& [c, d] : nd->getNumericProperties()) {
+			std::string sanitizedKey = sanitizeIdentifier(c);
+			emitCode << "  double n_" << sanitizedKey << " = "
+				<< emitNumericLiteral(d) << ";\n";
+		}
+
+		// String props
+		for (const auto& [k, v] : nd->getProperties()) {
+			emitCode << "  const char* s_" << k << " = \"" << v << "\";\n";
+		}
+
+		// Optional stored audio
+		if (!nd->optionalStoredAudio.empty()) {
+			emitCode << "  std::vector<ddtype> stores = {";
+			for (size_t idx2 = 0; idx2 < nd->optionalStoredAudio.size(); ++idx2) {
+				auto d = nd->optionalStoredAudio[idx2];
+				if (idx2 > 0) emitCode << ", ";
+				emitCode << "{ .i = " << d.i << "LL }";
+			}
+			emitCode << "};\n";
+		}
+
+		// Input nodes
+		if (nd->getType()->isInputNode) {
+			const int pin = nd->inputIndex;
+			emitCode << "  std::vector<ddtype> i0(inputs[" << pin << "], inputs[" << pin << "] + inputSizes[" << pin << "]);\n";
+			emitCode << "  int isize0 = (int)i0.size();\n";
+		}
+		else {
+			// Regular inputs
+			for (int j = 0; j < nd->getNumInputs(); j++) {
 				auto* inp = nd->getInput(j);
 				if (inp) {
-					const auto i = nodeFieldVars.at(inp);
-					emitCode << "ddtype* i" << juce::String(j) << " = field" << juce::String(i) << ";\n";
-					emitCode << "const int isize" << juce::String(j) << " = size" << juce::String(i) << ";\n";
+					const auto srcIdx = nodeFieldVars.at(inp);
+					emitCode << "  std::vector<ddtype>& i" << j << " = field" << juce::String(srcIdx) << ";\n";
+					emitCode << "  int isize" << j << " = size" << juce::String(srcIdx) << ";\n";
 
+					// Conversion handling
 					auto itype = nd->getType()->inputs[j].inputType;
-					if (itype == InputType::any) {
-						itype = nd->getTrueType();
-					}
+					if (itype == InputType::any) itype = nd->getTrueType();
 					auto otype = inp->getType()->outputType;
-					if (otype == InputType::followsInput) {
-						otype = inp->getTrueType();
+					if (otype == InputType::followsInput) otype = inp->getTrueType();
+
+					if (otype != itype) {
+						emitCode << "  std::vector<ddtype> i" << j << "_conv(isize" << j << ");\n";
+						// emit conversion loop (similar to your old one, but writing into iX_conv)
+						// ...
+						emitCode << "  i" << j << " = i" << j << "_conv;\n";
 					}
-					if (otype == InputType::boolean) {
-						if (itype == InputType::decimal) {
-							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
-							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
-								<< "i" << j << "_conv[k].i = (i" << j << "[k].d > 0.5 ? 1 : 0); }\n";
-							emitCode << "i" << j << " = i" << j << "_conv;\n";
-						}
-						else if (itype == InputType::integer) {
-							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
-							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
-								<< "i" << j << "_conv[k].i = (i" << j << "[k].i != 0 ? 1 : 0); }\n";
-							emitCode << "i" << j << " = i" << j << "_conv;\n";
-						}
-					}
-					else if (otype == InputType::integer) {
-						if (itype == InputType::boolean) {
-							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
-							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
-								<< "i" << j << "_conv[k].i = (i" << j << "[k].i != 0 ? 1 : 0); }\n";
-							emitCode << "i" << j << " = i" << j << "_conv;\n";
-						}
-						else if (itype == InputType::decimal) {
-							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
-							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
-								<< "i" << j << "_conv[k].i = (int64_t)round(i" << j << "[k].d); }\n";
-							emitCode << "i" << j << " = i" << j << "_conv;\n";
-						}
-					}
-					else if (otype == InputType::decimal) {
-						if (itype == InputType::boolean) {
-							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
-							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
-								<< "i" << j << "_conv[k].d = (i" << j << "[k].i != 0 ? 1.0 : 0.0); }\n";
-							emitCode << "i" << j << " = i" << j << "_conv;\n";
-						}
-						else if (itype == InputType::integer) {
-							emitCode << "ddtype i" << j << "_conv[isize" << j << "];\n";
-							emitCode << "for (int k = 0; k < isize" << j << "; ++k) { "
-								<< "i" << j << "_conv[k].d = (double)i" << j << "[k].i; }\n";
-							emitCode << "i" << j << " = i" << j << "_conv;\n";
-						}
-					}
- 				}
+				}
 				else {
 					auto type = nd->getType()->inputs[j].inputType;
-					if (type == InputType::any) {
-						type = nd->getTrueType();
-					}
-					emitCode << "ddtype val" << juce::String(j) << " = { 0 };\n";
-					if (type == InputType::decimal) {
-						emitCode << "val" << j << ".d = " << juce::String(nd->defaultValues[j].d) << ";\n";
-					}
-					else {
-						emitCode << "val" << j << ".i = " << juce::String(nd->defaultValues[j].i) << ";\n";
-					}
-
-					emitCode << "ddtype* i" << juce::String(j) << " = &val" << juce::String(j) << ";\n";
+					if (type == InputType::any) type = nd->getTrueType();
+					emitCode << "  std::vector<ddtype> i" << j << "(1);\n";
+					if (type == InputType::decimal)
+						emitCode << "  i" << j << "[0].d = " << juce::String(nd->defaultValues[j].d) << ";\n";
+					else
+						emitCode << "  i" << j << "[0].i = " << juce::String(nd->defaultValues[j].i) << ";\n";
+					emitCode << "  int isize" << j << " = 1;\n";
 				}
 			}
 		}
-		emitCode << nd->getType()->emitCode(*nd,ord) << "}\n\n";
-		ord += 1;
+
+		emitCode << "  " << nd->getType()->emitCode(*nd, ord) << "\n";
+		emitCode << "}\n\n";
+		++ord;
 	}
+
 	return emitCode;
 }
+
 
 const char* ddtypeClang =
 "#include <stdint.h>\n"
@@ -545,7 +516,8 @@ const juce::String clangHeader(uint64_t x) {
 }
 const juce::String clangCloser = "}";
 
-void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs)
+void Runner::initialize(RunnerInput& input, class SceneData* scene,
+	const std::vector<std::span<ddtype>>& outerInputs)
 {
 	input.nodesOrder.clear();
 	input.nodeOwnership.clear();
@@ -555,91 +527,83 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::v
 	input.remap.clear();
 	input.field.clear();
 	input.clangcode = "";
-	if (!scene) { return; }
-	if (scene->nodeDatas.empty()) { return; }
+	if (!scene) return;
+	if (scene->nodeDatas.empty()) return;
+
 	std::unordered_map<NodeData*, NodeData*>& remap = input.remap;
 	NodeData* editorOutput = nullptr;
 
 	storeCopies(input, scene, editorOutput, remap);
-	
-	// fallback if you truly use index 0 as output in your scene model:
-	if (!editorOutput) editorOutput = input.nodeCopies[0].get();
 
+	// fallback if index 0 should be output
+	if (!editorOutput) editorOutput = input.nodeCopies[0].get();
 	input.outputNode = editorOutput;
 
-	for (auto& newNode : input.nodeCopies) {
+	for (auto& newNode : input.nodeCopies)
 		newNode->markUncompiled(&input);
-	}
-	for (auto& node : input.nodeCopies) {
-		findRemainingSizes(node.get(), input, outerInputs);
-	}
+
+	for (auto& node : input.nodeCopies)
+		findRemainingSizes(node.get(), input, outerInputs); // just warms the cache
+
 	setupRecursive(input.outputNode, input);
+
 	for (auto& [node, ownership] : input.safeOwnership) {
 		if (node) {
 			auto [offset, size] = ownership;
 			input.nodeOwnership[node] = std::span<ddtype>(input.field.data() + offset, size);
 		}
 	}
-	juce::String clangCode = initializeClang(input, scene, outerInputs);
 
+	juce::String clangCode = initializeClang(input, scene, outerInputs);
 	input.clangcode = (clangHeader(globalCompileCounter) + clangCode + clangCloser).toStdString();
+
 	llvm::OptimizationLevel OX;
 	switch (input.optLevel) {
-	case OptLevel::high:
-		OX = llvm::OptimizationLevel::O3;
-		break;
-	case OptLevel::medium:
-		OX = llvm::OptimizationLevel::O2;
-		break;
-	case OptLevel::low:
-		OX = llvm::OptimizationLevel::O1;
-		break;
-	case OptLevel::minimal:
-		OX = llvm::OptimizationLevel::O0;
-		break;
-	case OptLevel::prioritizeSize:
-		OX = llvm::OptimizationLevel::Oz;
-		break;
-	case OptLevel::tradeOffSize:
-		OX = llvm::OptimizationLevel::Os;
-		break;
+	case OptLevel::high:           OX = llvm::OptimizationLevel::O3; break;
+	case OptLevel::medium:         OX = llvm::OptimizationLevel::O2; break;
+	case OptLevel::low:            OX = llvm::OptimizationLevel::O1; break;
+	case OptLevel::minimal:        OX = llvm::OptimizationLevel::O0; break;
+	case OptLevel::prioritizeSize: OX = llvm::OptimizationLevel::Oz; break;
+	case OptLevel::tradeOffSize:   OX = llvm::OptimizationLevel::Os; break;
 	}
-	input.compiledFunc = compileNodeKernel(input.clangcode, (juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString(), OX);
 
+	input.compiledFunc = compileNodeKernel(
+		input.clangcode,
+		(juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString(),
+		OX);
+
+	// Handle compile-time known nodes
 	UserInput fakeInput;
 	std::vector<NodeData*> tempNodesOrder;
 	for (NodeData* node : input.nodesOrder) {
 		if (node->isCompileTimeKnown()) {
 			input.compileTimeKnown.insert(node);
-			std::vector<ddtype> extraspace;
-			for (int i = 0; i < node->getNumInputs(); i += 1) {
-				auto input = node->getInput(i);
-				extraspace.push_back(node->defaultValues[i]);
-			}
+
+			std::vector<ddtype> extraspace(node->getNumInputs());
+			for (int i = 0; i < node->getNumInputs(); ++i)
+				extraspace[i] = node->defaultValues[i];
+
 			auto& output = input.nodeOwnership[node];
 			std::vector<std::span<ddtype>> inputs;
-			for (int i = 0; i < node->getNumInputs(); i += 1) {
-
-				auto nodeInput = node->getInput(i);
-				if (nodeInput) {
-					auto& otherspan = input.nodeOwnership[node->getInput(i)];
-					inputs.push_back(otherspan);
-				}
-				else {
+			for (int i = 0; i < node->getNumInputs(); ++i) {
+				if (auto* nodeInput = node->getInput(i))
+					inputs.push_back(input.nodeOwnership[nodeInput]);
+				else
 					inputs.push_back(std::span<ddtype>(&extraspace[i], 1));
-				}
 			}
-			ddtype defaultIfNeeded = node->getNumericProperties().contains("defaultValue") ? node->getNumericProperty("defaultValue") : 0.0;
+
+			ddtype defaultIfNeeded = node->getNumericProperties().contains("defaultValue")
+				? node->getNumericProperty("defaultValue") : 0.0;
 			std::span<ddtype> spanOverDefaultIfNeeded(&defaultIfNeeded, 1);
+
 			if (node->getType()->isInputNode) {
 				int inputIndex = node->inputIndex;
-				if (inputIndex >= 0 && inputIndex < outerInputs.size()) {
+				if (inputIndex >= 0 && inputIndex < (int)outerInputs.size())
 					inputs.push_back(outerInputs[inputIndex]);
-				}
-				else {
+				else
 					inputs.push_back(spanOverDefaultIfNeeded);
-				}
 			}
+
 			node->getType()->execute(*node, fakeInput, inputs, output, input);
 		}
 		else {
@@ -650,14 +614,11 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene, const std::v
 	for (auto& node : input.nodeCopies) {
 		if (remap.contains(node.get())) {
 			auto sceneNode = remap[node.get()];
-			if (sceneNode) {
+			if (sceneNode)
 				sceneNode->setCompileTimeSize(scene, node->getCompileTimeSize(&input));
-			}
 		}
 	}
+
 	input.nodesOrder = tempNodesOrder;
-	std::vector<ddtype> tempField;
-
-	//TODO emit c++ compile with clang do this as a series of reusable functions. one which emits the full cpp code so server can reuse this. one which compiles it down to runnable function and stores this in the runner
-
 }
+

@@ -27,7 +27,7 @@ public:
     static std::span<ddtype> run(const class RunnerInput* runnerInput, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs);
     static std::span<ddtype> getNodeField(NodeData*, std::unordered_map<NodeData*, std::span<ddtype>>& nodeOwnership);
     static bool containsNodeField(NodeData*, std::unordered_map<NodeData*, std::span<ddtype>>& nodeOwnership);
-    static std::vector<ddtype> findRemainingSizes(NodeData* node, class RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs);
+    static const std::vector<ddtype>& findRemainingSizes(class NodeData* node, class RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs);
 
     
     
