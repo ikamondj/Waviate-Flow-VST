@@ -232,64 +232,98 @@ bool Runner::containsNodeField(NodeData* d, std::unordered_map<NodeData*, std::s
 }
 
 		
+std::vector<ddtype> Runner::findRemainingSizes(NodeData* root, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs)
 const std::vector<ddtype>& Runner::findRemainingSizes(
 	NodeData* node,
 	RunnerInput& inlineInstance,
 	const std::vector<std::span<ddtype>>& outerInputs)
 {
-	// Memoization: return if already computed
-	if (inlineInstance.nodeCompileTimeOutputs.contains(node))
-		return inlineInstance.nodeCompileTimeOutputs[node];
+	// If already cached
+	if (inlineInstance.nodeCompileTimeOutputs.contains(root)) {
+		return inlineInstance.nodeCompileTimeOutputs[root];
+	}
 
-	std::vector<std::span<const ddtype>> actualspans;
-	std::vector<std::unique_ptr<std::vector<ddtype>>> ownedTemps;
+	struct Frame {
+		NodeData* node;
+		int state; // 0 = expand inputs, 1 = compute
+		std::vector<std::vector<ddtype>> inputspans;
+	};
 
-	// Build input spans
-	for (int i = 0; i < node->getNumInputs(); ++i) {
-		if (NodeData* input = node->getInput(i)) {
-			const auto& depOut = findRemainingSizes(input, inlineInstance, outerInputs);
-			actualspans.emplace_back(depOut.data(), depOut.size());
+	std::vector<ddtype> result;
+	std::stack<Frame> stack;
+	stack.push({ root, 0, {} });
+
+	while (!stack.empty()) {
+		Frame frame = std::move(stack.top());
+		stack.pop();
+
+		NodeData* node = frame.node;
+
+		// If cached, reuse and continue
+		if (inlineInstance.nodeCompileTimeOutputs.contains(node)) {
+			continue;
+		}
+
+		if (frame.state == 0) {
+			// Expand inputs first
+			frame.state = 1;
+			stack.push(std::move(frame)); // push back current frame for later compute
+
+			for (int i = node->getNumInputs() - 1; i >= 0; i--) {
+				NodeData* input = node->getInput(i);
+				if (input) {
+					if (!inlineInstance.nodeCompileTimeOutputs.contains(input)) {
+						stack.push({ input, 0, {} }); // process this child first
+					}
+				}
+			}
 		}
 		else {
-			auto buf = std::make_unique<std::vector<ddtype>>(1, node->defaultValues[i]);
-			actualspans.emplace_back(buf->data(), buf->size());
-			ownedTemps.push_back(std::move(buf));
+			// All inputs processed � compute this node
+			std::vector<std::vector<ddtype>> inputspans;
+			for (int i = 0; i < node->getNumInputs(); i++) {
+				NodeData* input = node->getInput(i);
+				if (input) {
+					inputspans.push_back(inlineInstance.nodeCompileTimeOutputs[input]);
+				}
+				else {
+					inputspans.push_back({ node->defaultValues[i] });
+				}
+			}
+
+			if (node->getType()->isInputNode) {
+				int inputIndex = node->inputIndex;
+				if (outerInputs.empty()) {
+					inputspans.push_back({ 0.0 }); // TODO: custom defaults
+				}
+				else {
+					inputspans.push_back(std::vector<ddtype>(outerInputs[inputIndex].begin(), outerInputs[inputIndex].end()));
+				}
+			}
+
+			std::vector<std::span<ddtype>> actualspans;
+			for (auto& vec : inputspans) {
+				actualspans.emplace_back(vec);
+			}
+
+			int dim = node->getMaxOutputDimension(inputspans, inlineInstance, node->inputIndex);
+			node->setCompileTimeSize(&inlineInstance, dim);
+
+			std::vector<ddtype> tempOutput(dim, 0.0);
+			std::span<ddtype> tempOutSpan(tempOutput);
+
+			UserInput user;
+			node->getType()->execute(*node, user, actualspans, tempOutSpan, inlineInstance);
+
+			inlineInstance.nodeCompileTimeOutputs[node] = tempOutput;
+
+			if (node == root) {
+				result = tempOutput;
+			}
 		}
 	}
 
-	if (node->getType()->isInputNode) {
-		int inputIndex = node->inputIndex;
-		if (outerInputs.empty() || inputIndex >= (int)outerInputs.size()) {
-			auto buf = std::make_unique<std::vector<ddtype>>(1, ddtype{ .d = 0.0 });
-			actualspans.emplace_back(buf->data(), buf->size());
-			ownedTemps.push_back(std::move(buf));
-		}
-		else {
-			auto buf = std::make_unique<std::vector<ddtype>>(outerInputs[inputIndex].begin(),
-				outerInputs[inputIndex].end());
-			actualspans.emplace_back(buf->data(), buf->size());
-			ownedTemps.push_back(std::move(buf));
-		}
-	}
-
-	// Allocate result directly in cache
-	auto& outVec = inlineInstance.nodeCompileTimeOutputs[node];
-	const int dim = node->getMaxOutputDimension(/* adapt your API */, inlineInstance, node->inputIndex);
-	outVec.assign(dim, ddtype{ .d = 0.0 });
-
-	std::span<ddtype> outSpan(outVec.data(), outVec.size());
-	UserInput user;
-
-	// Convert actualspans -> mutable spans for execute
-	std::vector<std::span<ddtype>> mutableSpans;
-	mutableSpans.reserve(actualspans.size());
-	for (auto s : actualspans)
-		mutableSpans.emplace_back(const_cast<ddtype*>(s.data()), s.size());
-
-	node->getType()->execute(*node, user, mutableSpans, outSpan, inlineInstance);
-	node->setCompileTimeSize(&inlineInstance, dim);
-
-	return outVec;
+	return result;
 }
 
 
