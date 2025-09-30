@@ -7,7 +7,7 @@
 
   ==============================================================================
 */
-
+#include <stack>
 #include "Runner.h"
 #include "NodeData.h"
 #include "SceneComponent.h"
@@ -130,61 +130,96 @@ bool Runner::containsNodeField(NodeData* d, std::unordered_map<NodeData*, std::s
 }
 
 		
-std::vector<ddtype> Runner::findRemainingSizes(NodeData* node, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs)
+std::vector<ddtype> Runner::findRemainingSizes(NodeData* root, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs)
 {
-	std::vector<ddtype> tempOutput;
-	std::vector<std::span<ddtype>> actualspans;
-	UserInput user;
-
-	if (inlineInstance.nodeCompileTimeOutputs.contains(node)) {
-		return inlineInstance.nodeCompileTimeOutputs[node];
+	// If already cached
+	if (inlineInstance.nodeCompileTimeOutputs.contains(root)) {
+		return inlineInstance.nodeCompileTimeOutputs[root];
 	}
-	else {
+
+	struct Frame {
+		NodeData* node;
+		int state; // 0 = expand inputs, 1 = compute
 		std::vector<std::vector<ddtype>> inputspans;
-		for (int i = 0; i < node->getNumInputs(); i += 1) {
-			NodeData* input = node->getInput(i);
-			if (input) {
-				std::vector<ddtype> inputsOutput = findRemainingSizes(input, inlineInstance, outerInputs);
-				inputspans.push_back(inputsOutput);
-			}
-			else {
+	};
 
-				std::vector<ddtype> inputsOutput = { node->defaultValues[i]};
-				inputspans.push_back(inputsOutput);
+	std::vector<ddtype> result;
+	std::stack<Frame> stack;
+	stack.push({ root, 0, {} });
+
+	while (!stack.empty()) {
+		Frame frame = std::move(stack.top());
+		stack.pop();
+
+		NodeData* node = frame.node;
+
+		// If cached, reuse and continue
+		if (inlineInstance.nodeCompileTimeOutputs.contains(node)) {
+			continue;
+		}
+
+		if (frame.state == 0) {
+			// Expand inputs first
+			frame.state = 1;
+			stack.push(std::move(frame)); // push back current frame for later compute
+
+			for (int i = node->getNumInputs() - 1; i >= 0; i--) {
+				NodeData* input = node->getInput(i);
+				if (input) {
+					if (!inlineInstance.nodeCompileTimeOutputs.contains(input)) {
+						stack.push({ input, 0, {} }); // process this child first
+					}
+				}
 			}
 		}
-		if (node->getType()->isInputNode) {
-			
-			int inputIndex = node->inputIndex;
-			if (outerInputs.empty()) {
-				std::vector<ddtype> defaultValue;
-				defaultValue.push_back(0.0); //TODO actual custom default values for functions
-				inputspans.push_back(defaultValue);
+		else {
+			// All inputs processed — compute this node
+			std::vector<std::vector<ddtype>> inputspans;
+			for (int i = 0; i < node->getNumInputs(); i++) {
+				NodeData* input = node->getInput(i);
+				if (input) {
+					inputspans.push_back(inlineInstance.nodeCompileTimeOutputs[input]);
+				}
+				else {
+					inputspans.push_back({ node->defaultValues[i] });
+				}
 			}
-			else {
-				inputspans.push_back(std::vector<ddtype>(outerInputs[inputIndex].begin(), outerInputs[inputIndex].end()));
+
+			if (node->getType()->isInputNode) {
+				int inputIndex = node->inputIndex;
+				if (outerInputs.empty()) {
+					inputspans.push_back({ 0.0 }); // TODO: custom defaults
+				}
+				else {
+					inputspans.push_back(std::vector<ddtype>(outerInputs[inputIndex].begin(), outerInputs[inputIndex].end()));
+				}
 			}
-			
-		}
-		
-		for (int i = 0; i < inputspans.size(); i += 1) {
-			actualspans.emplace_back(inputspans[i]);
-		}
-		auto nodeType = node->getType();
-		int dim = node->getMaxOutputDimension(inputspans, inlineInstance, node->inputIndex);
-		node->setCompileTimeSize(&inlineInstance, dim);
-		for (int i = 0; i < dim; i += 1) {
-			tempOutput.push_back(0.0);
-		}
-		std::span tempOutSpan = std::span(tempOutput);
 
+			std::vector<std::span<ddtype>> actualspans;
+			for (auto& vec : inputspans) {
+				actualspans.emplace_back(vec);
+			}
 
+			int dim = node->getMaxOutputDimension(inputspans, inlineInstance, node->inputIndex);
+			node->setCompileTimeSize(&inlineInstance, dim);
 
-		node->getType()->execute(*node, user, actualspans, tempOutSpan, inlineInstance);
-		inlineInstance.nodeCompileTimeOutputs.insert({ node, tempOutput });
-		return tempOutput;
+			std::vector<ddtype> tempOutput(dim, 0.0);
+			std::span<ddtype> tempOutSpan(tempOutput);
+
+			UserInput user;
+			node->getType()->execute(*node, user, actualspans, tempOutSpan, inlineInstance);
+
+			inlineInstance.nodeCompileTimeOutputs[node] = tempOutput;
+
+			if (node == root) {
+				result = tempOutput;
+			}
+		}
 	}
+
+	return result;
 }
+
 
 void storeCopies(RunnerInput& input,
 	SceneData* startScene,

@@ -70,29 +70,86 @@ const double NodeData::getNumericProperty(const std::string& key) const noexcept
 const std::vector<ddtype> NodeData::getCompileTimeValue(RunnerInput* inlineInstance) const noexcept
 {
     std::vector<std::vector<ddtype>> ins;
-    for (int i = 0; i < getNumInputs(); i += 1) {
+    ins.resize(getNumInputs());
+
+    // explicit stack frame struct
+    struct Frame {
+        const NodeData* node;
+        int inputIndex;
+    };
+
+    std::vector<Frame> stack;
+
+    // populate stack with this node's inputs
+    for (int i = 0; i < getNumInputs(); i++) {
         auto input = getInput(i);
-        std::vector<ddtype> in;
         if (input) {
-            in = input->getCompileTimeValue(inlineInstance);
+            stack.push_back({ input, i });
         }
         else {
-            in.push_back(defaultValues[i]);
+            ins[i].push_back(defaultValues[i]);
         }
-        ins.push_back(in);
     }
+
+    // iterative DFS
+    while (!stack.empty()) {
+        Frame frame = stack.back();
+        stack.pop_back();
+
+        const NodeData* node = frame.node;
+        int idx = frame.inputIndex;
+
+        // check if already computed
+        if (ins[idx].empty()) {
+            // compute node’s value iteratively
+            std::vector<std::vector<ddtype>> localIns;
+            localIns.resize(node->getNumInputs());
+
+            std::vector<int> childIndices;
+            for (int j = 0; j < node->getNumInputs(); j++) {
+                auto child = node->getInput(j);
+                if (child) {
+                    if (localIns[j].empty()) {
+                        stack.push_back({ node, idx }); // reprocess parent later
+                        stack.push_back({ child, j });  // compute child first
+                        goto nextIteration;           // delay processing
+                    }
+                }
+                else {
+                    localIns[j].push_back(node->defaultValues[j]);
+                }
+            }
+
+            // compute node output
+            {
+                std::vector<std::span<ddtype>> spanInputs;
+                for (auto& in : localIns) {
+                    spanInputs.push_back(std::span<ddtype>(&in[0], in.size()));
+                }
+                UserInput fakeInput;
+                std::vector<ddtype> outputField;
+                outputField.resize(node->getMaxOutputDimension(localIns, *inlineInstance, inputIndex));
+                std::span<ddtype> outputSpan(&outputField[0], outputField.size());
+                node->getType()->execute(*node, fakeInput, spanInputs, outputSpan, *inlineInstance);
+                ins[idx] = std::move(outputField);
+            }
+        }
+
+    nextIteration:;
+    }
+
     std::vector<std::span<ddtype>> spanInputs;
     for (auto& in : ins) {
         spanInputs.push_back(std::span<ddtype>(&in[0], in.size()));
     }
     UserInput fakeInput;
     std::vector<ddtype> outputField;
-    
     outputField.resize(getMaxOutputDimension(ins, *inlineInstance, inputIndex));
     std::span<ddtype> outputSpan(&outputField[0], outputField.size());
     getType()->execute(*this, fakeInput, spanInputs, outputSpan, *inlineInstance);
     return outputField;
 }
+
 const std::map<std::string, double>& NodeData::getNumericProperties() const noexcept { return numericProperties; };
 
 void NodeData::setProperty(const std::string & key, const std::string& value) { properties[key] = value; }
