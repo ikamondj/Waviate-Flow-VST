@@ -273,12 +273,12 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<double>& buff
             }
         }
     }
-    const int n = buffer.getNumSamples();
-    int start1, size1, start2, size2;
-    fifo.prepareToWrite(n, start1, size1, start2, size2);
-    if (size1 > 0) memcpy(ring.data() + start1, buffer.getReadPointer(0), size1 * sizeof(float));
-    if (size2 > 0) memcpy(ring.data() + start2, buffer.getReadPointer(0) + size1, size2 * sizeof(float));
-    fifo.finishedWrite(size1 + size2);
+    //const int n = buffer.getNumSamples();
+    //int start1, size1, start2, size2;
+    //fifo.prepareToWrite(n, start1, size1, start2, size2);
+    //if (size1 > 0) memcpy(ring.data() + start1, buffer.getReadPointer(0), size1 * sizeof(float));
+    //if (size2 > 0) memcpy(ring.data() + start2, buffer.getReadPointer(0) + size1, size2 * sizeof(float));
+    //fifo.finishedWrite(size1 + size2);
 
     //totalSamplesProcessed.fetch_add(buffer.getNumSamples(), std::memory_order_relaxed);
     userInput.numFramesStartOfBlock += buffer.getNumSamples();
