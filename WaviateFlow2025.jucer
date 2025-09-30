@@ -62,6 +62,7 @@
         <FILE id="JePp2E" name="NodeType.cpp" compile="1" resource="0" file="Source/NodeType.cpp"/>
         <FILE id="n7lkXG" name="NodeType.h" compile="0" resource="0" file="Source/NodeType.h"/>
         <FILE id="jpo0uR" name="Registry.cpp" compile="1" resource="0" file="Source/Registry.cpp"/>
+        <FILE id="QaK5vj" name="Registry.h" compile="0" resource="0" file="Source/Registry.h"/>
         <FILE id="uMGfsu" name="Runner.cpp" compile="1" resource="0" file="Source/Runner.cpp"/>
         <FILE id="lBEJ44" name="Runner.h" compile="0" resource="0" file="Source/Runner.h"/>
         <FILE id="iYHwWQ" name="RunnerInput.cpp" compile="1" resource="0" file="Source/RunnerInput.cpp"/>

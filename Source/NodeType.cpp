@@ -117,7 +117,7 @@ NodeType::NodeType(uint64_t userId, uint64_t nodeId, WaviateFlow2025AudioProcess
 }
 
 NodeType::NodeType(uint64_t nodeId) {
-    this->setNodeId(0, nodeId);
+    this->setNodeId(0, nodeId + registryCreatePrefix);
 }
 
 

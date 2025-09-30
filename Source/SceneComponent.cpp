@@ -38,7 +38,6 @@ SceneComponent::~SceneComponent()
 
 void SceneComponent::onSceneChanged()
 {
-    
     processorRef->initializeAllScenes();
     computeAllNodeWildCards();
     ensureNodeConnectionsCorrect(this);

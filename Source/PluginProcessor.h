@@ -14,6 +14,7 @@
 #include "Runner.h"
 #include "UserData.h"
 #include "RunnerInput.h"
+#include "Registry.h"
 #include "DawManager.h"
 //==============================================================================
 /**
@@ -38,6 +39,9 @@ public:
    #endif
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    void processBlock(juce::AudioBuffer<double>& buffer, juce::MidiBuffer& midi) override;
+    
+
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -102,12 +106,21 @@ public:
     uint16_t getCurrentLoadedTypeIndex();
     uint64_t getCurrentLoadedUserIndex();
     void initializeAllScenes();
+    void displaySceneName();
     DawManager dawManager;
+protected:
+    bool supportsDoublePrecisionProcessing() const override;
 
+    void initializeRegistryMath();
+    void initializeRegistryDaw();
+    void initializeRegistryIntegral();
+    void initializeRegistryMidi();
+    void initializeRegistryVector();
 private:
     uint16_t currentLoadedTypeIndex = 0;
     uint64_t currentLoadedUserIndex = 1;
     class SceneData* audibleScene;
+    juce::AudioBuffer<double> dbuff;
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (WaviateFlow2025AudioProcessor)
 };
