@@ -8,6 +8,7 @@
   ==============================================================================
 */
 #define NOMINMAX
+#define USE_GRAPH_EXEC
 #define USE_EMBEDDED_CLANG
 #include <JuceHeader.h>
 #ifdef _WIN32
@@ -834,6 +835,8 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene,
 	juce::String clangCode = initializeClang(input, scene, outerInputs);
 	input.clangcode = (clangHeader(globalCompileCounter) + clangCode + clangCloser).toStdString();
 
+	
+#ifndef USE_GRAPH_EXEC
 	llvm::OptimizationLevel OX;
 	switch (input.optLevel) {
 	case OptLevel::high:           OX = llvm::OptimizationLevel::O3; break;
@@ -851,6 +854,7 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene,
 		input.clangcode,
 		(juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString(), input.optLevel);
 		//,OX);
+#endif
 #endif
 
 	// Handle compile-time known nodes
