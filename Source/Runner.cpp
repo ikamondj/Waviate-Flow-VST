@@ -57,22 +57,45 @@ std::string triple = "x86_64-unknown-linux-gnu";
 #include "NodeType.h"
 
 
-std::string getLibCxxLoc() {
-	PWSTR widePath = nullptr;
-	std::string result;
+void Runner::setupIterative(NodeData* root, RunnerInput& inlineInstance) {
+	if (!root) return;
 
-	if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_ProgramFiles, 0, NULL, &widePath))) {
-		char narrowPath[MAX_PATH];
-		wcstombs(narrowPath, widePath, MAX_PATH);
-		result = narrowPath;
-		CoTaskMemFree(widePath);
-	}
-	else {
-		// Fallback if API fails
-		result = "C:\\Program Files";
-	}
+	struct Frame {
+		NodeData* node;
+		int inputIndex;
+	};
 
-	return result + "\\Waviate\\";
+	std::vector<Frame> stack;
+	stack.push_back({ root, 0 });
+
+	while (!stack.empty()) {
+		Frame& frame = stack.back();
+		NodeData* node = frame.node;
+
+		// Already processed?
+		if (!node || inlineInstance.safeOwnership.contains(node)) {
+			stack.pop_back();
+			continue;
+		}
+
+		// Process inputs one by one (simulate recursion)
+		if (frame.inputIndex < node->getNumInputs()) {
+			auto input = node->getInput(frame.inputIndex++);
+			if (input != nullptr && !inlineInstance.safeOwnership.contains(input)) {
+				stack.push_back({ input, 0 });
+			}
+		}
+		else {
+			// All inputs done, now "return" and process node
+			int size = node->getCompileTimeSize(&inlineInstance);
+			int offset = inlineInstance.field.size();
+			inlineInstance.field.resize(inlineInstance.field.size() + size);
+			inlineInstance.safeOwnership.insert({ node, {offset, size} });
+			inlineInstance.nodesOrder.push_back(node);
+
+			stack.pop_back();
+		}
+	}
 }
 
 
@@ -823,7 +846,7 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene,
 	for (auto& node : input.nodeCopies)
 		findRemainingSizes(node.get(), input, outerInputs, *userInput); // just warms the cache
 
-	setupRecursive(input.outputNode, input);
+	setupIterative(input.outputNode, input);
 
 	for (auto& [node, ownership] : input.safeOwnership) {
 		if (node) {

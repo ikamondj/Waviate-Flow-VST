@@ -20,7 +20,9 @@
 class juce::String;
 class Runner {
 public:
-	static void setupRecursive(class NodeData* node, class RunnerInput& inlineInstance);
+    static void setupRecursive(class NodeData* node, class RunnerInput& inlineInstance);
+    static void setupIterative(NodeData* root, RunnerInput& inlineInstance);
+    
     
     
 
