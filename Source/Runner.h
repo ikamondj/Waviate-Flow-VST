@@ -18,7 +18,9 @@
 #include "ddtype.h"
 class Runner {
 public:
-	static void setupRecursive(class NodeData* node, class RunnerInput& inlineInstance);
+    static void setupRecursive(class NodeData* node, class RunnerInput& inlineInstance);
+    static void setupIterative(NodeData* root, RunnerInput& inlineInstance);
+    
     
     static std::span<ddtype> run(const class RunnerInput* runnerInput, class UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs);
     static std::span<ddtype> getNodeField(NodeData*, std::unordered_map<NodeData*, std::span<ddtype>>& nodeOwnership);
