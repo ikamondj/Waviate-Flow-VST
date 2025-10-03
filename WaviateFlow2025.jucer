@@ -36,6 +36,14 @@
               file="Source/UserSessionManager.h"/>
       </GROUP>
       <GROUP id="{37CAC29E-88E6-DD01-B2F8-3A6590B52EBF}" name="Core">
+        <GROUP id="{EA6EE087-B6A3-DFEE-89F5-F45D325C74B9}" name="BuiltInNodeTypes">
+          <FILE id="dCtQ13" name="DawTypes.cpp" compile="1" resource="0" file="Source/DawTypes.cpp"/>
+          <FILE id="uMa6Rv" name="IntegralTypes.cpp" compile="1" resource="0"
+                file="Source/IntegralTypes.cpp"/>
+          <FILE id="i6cWOc" name="MathTypes.cpp" compile="1" resource="0" file="Source/MathTypes.cpp"/>
+          <FILE id="rSzEpo" name="MidiTypes.cpp" compile="1" resource="0" file="Source/MidiTypes.cpp"/>
+          <FILE id="ixMOOT" name="VectorTypes.cpp" compile="1" resource="0" file="Source/VectorTypes.cpp"/>
+        </GROUP>
         <FILE id="Scb39D" name="OptLevel.h" compile="0" resource="0" file="Source/OptLevel.h"/>
         <FILE id="L0Mguv" name="SceneData.cpp" compile="1" resource="0" file="Source/SceneData.cpp"/>
         <FILE id="ixrTCW" name="SceneData.h" compile="0" resource="0" file="Source/SceneData.h"/>

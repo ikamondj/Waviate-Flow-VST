@@ -19,7 +19,7 @@ DEFINE_AND_CREATE_VAR(
     *count = 0;
 }
 
-inline void CircleBuffer_add(double* data,
+static inline void CircleBuffer_add(double* data,
     int* head,
     int* count,
     double value) {
@@ -30,15 +30,15 @@ inline void CircleBuffer_add(double* data,
     }
 }
 
-inline int CircleBuffer_size(const int* count) {
+static inline int CircleBuffer_size(const int* count) {
     return *count;
 }
 
-inline int CircleBuffer_capacity(void) {
+static inline int CircleBuffer_capacity(void) {
     return CIRCLEBUFFER_CAPACITY;
 }
 
-inline double CircleBuffer_get(const double* data,
+static inline double CircleBuffer_get(const double* data,
     const int head,
     const int count,
     int indexAgo) {
@@ -49,7 +49,7 @@ inline double CircleBuffer_get(const double* data,
     return data[idx];
 }
 
-struct UserInput
+typedef struct UserInput
 {
     double notesOn[MIDI_NOTE_COUNT];
     double noteStartFrame[MIDI_NOTE_COUNT];
@@ -59,7 +59,6 @@ struct UserInput
     double noteHz[MIDI_NOTE_COUNT];
     double noteCycle[MIDI_NOTE_COUNT];
     double dawParams[DAW_PARAM_SIZE];
-    const int dawParamCount = DAW_PARAM_SIZE;
     int midiCCValues[MIDI_NOTE_COUNT];
     double pitchWheelValue;
     double modWheelValue;
@@ -80,18 +79,18 @@ struct UserInput
     int timeSigBottom;
     double BPM;
     double leftInputHistoryArray[CIRCLEBUFFER_CAPACITY];
-    int leftInputHistoryHead = 0;
-    int leftInputHistorySize = 0;
+    int leftInputHistoryHead;
+    int leftInputHistorySize;
     double rightInputHistoryArray[CIRCLEBUFFER_CAPACITY];
-    int rightInputHistoryHead = 0;
-    int rightInputHistorySize = 0;
+    int rightInputHistoryHead;
+    int rightInputHistorySize;
     //double getHistoricalSample(int samplesAgo) const;
     //std::unordered_map<juce::String, double> namedValues;
     //std::unordered_map<int, double> storeableValues;
-};
+} UserInput;
 
 
 , UserInputClang
 );
 
-inline const juce::String UserInputClangJ(UserInputClang);
+static inline const juce::String UserInputClangJ(UserInputClang);

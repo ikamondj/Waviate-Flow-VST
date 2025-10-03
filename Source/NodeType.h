@@ -60,8 +60,8 @@ struct NodeType {
     static const NodeType* getTypeByNodeID(uint64_t fullId);
     static void putIdLookup(const NodeType& t);
     void setNodeId(uint64_t userId, uint64_t nodeId);
-    std::function<std::string(NodeData&, int uniqueNodeOrder)> emitCode;
-    std::function<std::vector<GlobalClangVar>(NodeData&, int uniqueNodeOrder)> globalVarNames;
+    std::function<std::string(NodeData&, int uniqueNodeOrder)> emitCode = [](NodeData&, int) {return ""; };
+    std::function<std::vector<GlobalClangVar>(NodeData&, int uniqueNodeOrder)> globalVarNames = [](NodeData&, int) { return std::vector<GlobalClangVar>(); };
     bool ownsScene = false;
     NodeType(uint64_t nodeId);
     NodeType(uint64_t userId, uint64_t nodeId, class WaviateFlow2025AudioProcessor&);

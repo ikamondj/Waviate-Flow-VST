@@ -27,14 +27,14 @@ public:
     static std::span<ddtype> run(const class RunnerInput* runnerInput, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs);
     static std::span<ddtype> getNodeField(NodeData*, std::unordered_map<NodeData*, std::span<ddtype>>& nodeOwnership);
     static bool containsNodeField(NodeData*, std::unordered_map<NodeData*, std::span<ddtype>>& nodeOwnership);
-    static const std::vector<ddtype>& findRemainingSizes(class NodeData* node, class RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs);
+    static std::vector<ddtype> findRemainingSizes(NodeData* root, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs, UserInput& userInput);
 
     
     
     
 
     static void initialize(RunnerInput& input, class SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs);
-    static juce::String initializeClang(const RunnerInput& input, const SceneData* scene, const std::vector<std::span<ddtype>>& outerInputs);
-    static std::span<ddtype> runClang(const RunnerInput* runnerInputP, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs);
+    static std::string initializeClang(const class RunnerInput& input, const class SceneData* scene, const std::vector<std::span<ddtype>>& /*outerInputs*/);
+    static std::span<ddtype> runClang(RunnerInput* runnerInputP, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs);
 private:
 };

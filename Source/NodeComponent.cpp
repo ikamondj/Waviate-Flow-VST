@@ -240,7 +240,7 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                 int size = getNodeDataConst().getCompileTimeSize(scene);
                 tooltip.addItem(juce::String("output size: ") + juce::String(size), false, false, []() {});
                 if (getNodeDataConst().isCompileTimeKnown()) {
-                    auto field = getNodeDataConst().getCompileTimeValue(getOwningScene());
+                    auto field = getNodeDataConst().getCompileTimeValue(getOwningScene(), *getProcessorRef().dummyInput);
                     juce::String result = "value: { ";
                     for (int i = 0; i < (int)field.size(); ++i) {
                         result += ddtypeToString(field[i], getType().outputType);
@@ -268,7 +268,7 @@ void NodeComponent::mouseDown(const juce::MouseEvent& e)
                     tooltip.addItem(juce::String("value: ") + v, false, false, []() {});
                 }
                 else if (inputNode->isCompileTimeKnown()) {
-                    auto field = inputNode->getCompileTimeValue(getOwningScene());
+                    auto field = inputNode->getCompileTimeValue(getOwningScene(), *getProcessorRef().dummyInput);
                     juce::String result = "value: { ";
                     for (int i = 0; i < (int)field.size(); ++i) {
                         result += ddtypeToString(field[i], inputNode->getType()->outputType);

@@ -23,7 +23,6 @@ void WaviateFlow2025AudioProcessor::initializeRegistryIntegral() {
             {
                 for (int i = 0; i < static_cast<int>(inputs[0].size()); ++i) output[i] = inputs[0][i];
             };
-        outputType.emitCode = "for (int i = 0; i < i0size; i += 1) {o[i] = i0[i];}";
         outputType.getOutputSize = outputSizeEqualsSingleInputSize;
         outputType.buildUI = [](NodeComponent& n, NodeData& d) {
             n.inputGUIElements.push_back(std::make_unique<juce::AudioVisualiserComponent>(1));
@@ -72,7 +71,6 @@ void WaviateFlow2025AudioProcessor::initializeRegistryIntegral() {
             }
 
         };
-    inputType.emitCode = "for (int x = 0; x < isize0; x += 1) {o[x] = i0[x];}";
     inputType.isInputNode = true;
     inputType.getOutputSize = [](const std::vector<NodeData*>& inputNodes, const std::vector<std::vector<ddtype>>& inputs, const RunnerInput& inlineInstance, int inputNum, const NodeData&) {
         auto* inlineComponent = dynamic_cast<const NodeComponent*>(&inlineInstance);

@@ -67,7 +67,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistryMidi() {
                 {
                     int cc = ccIdx[i].i;
                     float val = 0.0f;
-                    if (cc >= 0 && cc < (int)userInput.midiCCValues.size())
+                    if (cc >= 0 && cc < 128)
                         val = userInput.midiCCValues[cc];
                     out[i].d = val; // already normalized 0..1
                 }

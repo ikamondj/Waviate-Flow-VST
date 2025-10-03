@@ -31,7 +31,7 @@ public:
 	const std::string getStringProperty(const std::string& key) const noexcept;
 	const double getNumericProperty(const std::string& key) const noexcept;
 
-    const std::vector<ddtype> getCompileTimeValue(class RunnerInput* inlineInstance) const noexcept;
+    const std::vector<ddtype> getCompileTimeValue(class RunnerInput* inlineInstance, UserInput& fakeInput) const noexcept;
     const std::map<std::string, double>& getNumericProperties() const noexcept;
     void setProperty(const std::string& key, const std::string& value);
     bool needsCompileTimeInputs() const;

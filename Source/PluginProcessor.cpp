@@ -21,14 +21,18 @@ WaviateFlow2025AudioProcessor::WaviateFlow2025AudioProcessor() : dawManager(*thi
                        )
 #endif
 {
-    userInput.numFramesStartOfBlock = 0;
+    userInput = std::make_unique<UserInput>();
+    dummyInput = std::make_unique<UserInput>();
+    userInput->numFramesStartOfBlock = 0;
     for (int i = 0; i < noteHzOfficialValues.size(); i += 1) {
-        userInput.noteHz[i] = noteHzOfficialValues[i] = 440.0 * std::pow(2.0, (i - 69) / 12.0);
-        userInput.noteVelocity[i] = 0.0;
-        userInput.notesOn[i] = 0.0;
-        userInput.noteStartFrame[i] = -100000000;
-        userInput.noteEndFrame[i] = 0.0;
+        userInput->noteHz[i] = noteHzOfficialValues[i] = 440.0 * std::pow(2.0, (i - 69) / 12.0);
+        userInput->noteVelocity[i] = 0.0;
+        userInput->notesOn[i] = 0.0;
+        userInput->noteStartFrame[i] = -100000000;
+        userInput->noteEndFrame[i] = 0.0;
     }
+    userInput->leftInputHistoryHead = userInput->rightInputHistoryHead = 0;
+    userInput->leftInputHistorySize = userInput->rightInputHistorySize = 0;
     // Always create the "main" scene
     registry.reserve(65536);
     initializeRegistry();
@@ -154,7 +158,7 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<double>& buff
     auto totalNumInputChannels = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    const double sampleRate = userInput.sampleRate = getSampleRate();
+    const double sampleRate = userInput->sampleRate = getSampleRate();
 
     auto mainIn = getBusBuffer(buffer, true, 0); // main input bus
     auto mainOut = getBusBuffer(buffer, false, 0); // main output bus
@@ -214,56 +218,55 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<double>& buff
                 ? double(sinceSwap) / double(fadeWindowSamples)
                 : 1.0;
 
-            userInput.leftInput = inL ? inL[sample] : 0.0f;
-            userInput.rightInput = inR ? inR[sample] : 0.0f;
-            userInput.sideChainL = inSL ? inSL[sample] : 0.0f;
-            userInput.sideChainR = inSR ? inSR[sample] : 0.0f;
+            userInput->leftInput = inL ? inL[sample] : 0.0f;
+            userInput->rightInput = inR ? inR[sample] : 0.0f;
+            userInput->sideChainL = inSL ? inSL[sample] : 0.0f;
+            userInput->sideChainR = inSR ? inSR[sample] : 0.0f;
 
-            userInput.sampleInBlock = sample;
+            userInput->sampleInBlock = sample;
             // Process all MIDI events scheduled for this sample
             while (hasEvent && eventSample == sample)
             {
-                handleMidi(msg, userInput); // <-- your MIDI handling
+                handleMidi(msg, *userInput); // <-- your MIDI handling
                 hasEvent = it.getNextEvent(msg, eventSample);
             }
 
             for (int i = 0; i < 128; i += 1) {
-                userInput.noteCycle[i] = std::fmod(userInput.noteCycle[i] +
+                userInput->noteCycle[i] = std::fmod(userInput->noteCycle[i] +
                     noteHzOfficialValues[i] * timePerSample, 1.0);
             }
 
-            outL[sample] = outR[sample] = userInput.isStereoRight = 0.0;
+            outL[sample] = outR[sample] = userInput->isStereoRight = 0.0;
             if (audibleScene) {
 
                 auto ndata = audibleScene->nodeDatas[0];
-                std::span<ddtype> l = Runner::run(runner, userInput, std::vector<std::span<ddtype>>());
+                std::span<ddtype> l = Runner::run(runner, *userInput, std::vector<std::span<ddtype>>());
                 for (ddtype d : l) {
                     outL[sample] += d.d * alpha;
                 }
 
-                userInput.isStereoRight = 1.0;
-                std::span<ddtype> r = Runner::run(runner, userInput, std::vector<std::span<ddtype>>());
+                userInput->isStereoRight = 1.0;
+                std::span<ddtype> r = Runner::run(runner, *userInput, std::vector<std::span<ddtype>>());
                 for (ddtype d : r) {
                     outR[sample] += d.d * alpha;
                 }
 
                 const double beta = 1 - alpha;
                 if (beta > 0.0) {
-                    userInput.isStereoRight = 0.0;
-                    std::span<ddtype> l = Runner::run(prevRunner, userInput, std::vector<std::span<ddtype>>());
+                    userInput->isStereoRight = 0.0;
+                    std::span<ddtype> l = Runner::run(prevRunner, *userInput, std::vector<std::span<ddtype>>());
                     for (ddtype d : l) {
                         outL[sample] += d.d * beta;
                     }
 
-                    userInput.isStereoRight = 1.0;
-                    std::span<ddtype> r = Runner::run(prevRunner, userInput, std::vector<std::span<ddtype>>());
+                    userInput->isStereoRight = 1.0;
+                    std::span<ddtype> r = Runner::run(prevRunner, *userInput, std::vector<std::span<ddtype>>());
                     for (ddtype d : r) {
                         outR[sample] += d.d * beta;
                     }
                 }
-
-                userInput.rightInputHistory.add(outR[sample] = 10.0 * std::tanh(outR[sample] * 0.1));
-                userInput.leftInputHistory.add(outL[sample] = 10.0 * std::tanh(outL[sample] * 0.1));
+                CircleBuffer_add(userInput->rightInputHistoryArray, &userInput->rightInputHistoryHead, &userInput->rightInputHistorySize, outR[sample] = 10.0 * std::tanh(outR[sample] * 0.1));
+                CircleBuffer_add(userInput->leftInputHistoryArray, &userInput->leftInputHistoryHead, &userInput->leftInputHistorySize, outL[sample] = 10.0 * std::tanh(outL[sample] * 0.1));
                 float z = outL[sample];
                 auto sc = dynamic_cast<SceneComponent*>(audibleScene);
                 if (sc) {
@@ -280,7 +283,7 @@ void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<double>& buff
     //fifo.finishedWrite(size1 + size2);
 
     //totalSamplesProcessed.fetch_add(buffer.getNumSamples(), std::memory_order_relaxed);
-    userInput.numFramesStartOfBlock += buffer.getNumSamples();
+    userInput->numFramesStartOfBlock += buffer.getNumSamples();
 }
 
 void WaviateFlow2025AudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)

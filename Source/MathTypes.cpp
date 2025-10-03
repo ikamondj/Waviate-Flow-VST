@@ -56,7 +56,7 @@
     }\
 };
 
-inline bool WaviateFlow2025AudioProcessor::supportsDoublePrecisionProcessing() const { return true; }
+bool WaviateFlow2025AudioProcessor::supportsDoublePrecisionProcessing() const { return true; }
 
 void WaviateFlow2025AudioProcessor::initializeRegistryMath() {
     NodeType::registryCreatePrefix = 300000;

@@ -67,7 +67,7 @@ const double NodeData::getNumericProperty(const std::string& key) const noexcept
 {
 	return numericProperties.contains(key) ? numericProperties.at(key) : 0.0;
 }
-const std::vector<ddtype> NodeData::getCompileTimeValue(RunnerInput* inlineInstance) const noexcept
+const std::vector<ddtype> NodeData::getCompileTimeValue(RunnerInput* inlineInstance, UserInput& fakeInput) const noexcept
 {
     std::vector<std::vector<ddtype>> ins;
     ins.resize(getNumInputs());
@@ -126,7 +126,6 @@ const std::vector<ddtype> NodeData::getCompileTimeValue(RunnerInput* inlineInsta
                 for (auto& in : localIns) {
                     spanInputs.push_back(std::span<ddtype>(&in[0], in.size()));
                 }
-                UserInput fakeInput;
                 std::vector<ddtype> outputField;
                 outputField.resize(node->getMaxOutputDimension(localIns, *inlineInstance, inputIndex));
                 std::span<ddtype> outputSpan(&outputField[0], outputField.size());
@@ -142,7 +141,6 @@ const std::vector<ddtype> NodeData::getCompileTimeValue(RunnerInput* inlineInsta
     for (auto& in : ins) {
         spanInputs.push_back(std::span<ddtype>(&in[0], in.size()));
     }
-    UserInput fakeInput;
     std::vector<ddtype> outputField;
     outputField.resize(getMaxOutputDimension(ins, *inlineInstance, inputIndex));
     std::span<ddtype> outputSpan(&outputField[0], outputField.size());

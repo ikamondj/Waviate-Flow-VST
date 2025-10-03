@@ -17,8 +17,11 @@
 #include "ddtype.h"
 #include "OptLevel.h"
 
-using NodeFn = void(*)(ddtype* output, int outputSize,
-    ddtype** inputs, int* inputSizes, int numInputs, struct UserInput* u);
+using NodeFn = void(*)(ddtype* dataField, int dataFieldSize,
+    ddtype* output, int outputSize,
+    ddtype** inputs, int* inputSizes, int numInputs,
+    struct UserInput* u);
+
 
 class NodeData;
 class RunnerInput {

@@ -39,7 +39,7 @@ void WaviateFlow2025AudioProcessor::initializeRegistryDaw() {
                 {
                     int pi = idx[i].i;
                     float val = 0.0f;
-                    if (pi >= 0 && pi < params.size())
+                    if (pi >= 0 && pi < 1024)
                         val = params[pi]; // already normalized 0..1
                     out[i].d = val;
                 }

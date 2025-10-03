@@ -7,7 +7,16 @@
 
   ==============================================================================
 */
+#define NOMINMAX
+#define USE_EMBEDDED_CLANG
 #include <JuceHeader.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#include <shlobj.h>
+#include <string>
+#include <iostream>
+#include <fstream>
 
 #include <llvm/ExecutionEngine/Orc/LLJIT.h>
 #include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
@@ -16,12 +25,24 @@
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/TextDiagnosticPrinter.h>
 #include <clang/Tooling/Tooling.h>
+#include <clang/Frontend/FrontendActions.h>
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/OptimizationLevel.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
+#include <llvm/Support/VirtualFileSystem.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/raw_ostream.h>
+
+#ifdef _WIN32
+std::string triple = "x86_64-pc-windows-msvc";
+#elif __APPLE__
+std::string triple = "x86_64-apple-darwin";
+#else
+std::string triple = "x86_64-unknown-linux-gnu";
+#endif
 
 
 
@@ -35,11 +56,165 @@
 #include "NodeType.h"
 
 
+std::string getLibCxxLoc() {
+	PWSTR widePath = nullptr;
+	std::string result;
+
+	if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_ProgramFiles, 0, NULL, &widePath))) {
+		char narrowPath[MAX_PATH];
+		wcstombs(narrowPath, widePath, MAX_PATH);
+		result = narrowPath;
+		CoTaskMemFree(widePath);
+	}
+	else {
+		// Fallback if API fails
+		result = "C:\\Program Files";
+	}
+
+	return result + "\\Waviate\\";
+}
+
 
 static std::unique_ptr<llvm::orc::LLJIT> GlobalJIT;  // keep alive
 
+#ifdef _WIN32
+#include <windows.h>
+#define DYNLIB_HANDLE HMODULE
+#define DYNLIB_LOAD(name) LoadLibraryA(name)
+#define DYNLIB_GETSYM GetProcAddress
+#define DYNLIB_CLOSE FreeLibrary
+#define DLL_EXT ".dll"
+#elif __APPLE__
+#include <dlfcn.h>
+#define DYNLIB_HANDLE void*
+#define DYNLIB_LOAD(name) dlopen(name, RTLD_NOW)
+#define DYNLIB_GETSYM dlsym
+#define DYNLIB_CLOSE dlclose
+#define DLL_EXT ".dylib"
+#else
+#include <dlfcn.h>
+#define DYNLIB_HANDLE void*
+#define DYNLIB_LOAD(name) dlopen(name, RTLD_NOW)
+#define DYNLIB_GETSYM dlsym
+#define DYNLIB_CLOSE dlclose
+#define DLL_EXT ".so"
+#endif
+
+std::string optFlag(OptLevel opt) {
+#ifdef _WIN32
+	switch (opt) {
+	case OptLevel::minimal: return "/Od";
+	case OptLevel::low: return "/O1";
+	case OptLevel::medium: return "/O2";
+	case OptLevel::high: return "/Ox";  // MSVC's "full optimize"
+	case OptLevel::prioritizeSize: return "/O1";  // size-ish
+	case OptLevel::tradeOffSize: return "/O1";  // closest equivalent
+	}
+#else
+	switch (opt) {
+	case OptLevel::O0: return "-O0";
+	case OptLevel::O1: return "-O1";
+	case OptLevel::O2: return "-O2";
+	case OptLevel::O3: return "-O3";
+	case OptLevel::Os: return "-Os";
+	case OptLevel::Oz: return "-Oz";
+	}
+#endif
+	return "";
+}
+
+#include <array>
+#include <cstdio>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <sstream>
+#include <iostream>
+#include <fstream>
+
+NodeFn compileNodeKernelDll(const std::string& sourceCode,
+	const std::string& funcName = "nodeTypeOutput",
+	OptLevel opt = OptLevel::high)
+{
+	// 1. Write source to a temporary file
+	std::string srcFile = "jit_input.c";
+	std::ofstream out(srcFile);
+	out << sourceCode;
+	out.close();
+
+	// 2. Decide output lib name
+	static std::atomic<uint64_t> dllCounter{ 0 };
+	std::string libFile = "jit_output_" + std::to_string(dllCounter++) + DLL_EXT;
+
+
+	// 3. Build compile command using clang
+	std::string cmd;
+#if defined(_WIN32)
+	// Windows: build DLL with clang, link dynamically
+	cmd = "clang -shared -o " + libFile + " " + srcFile + " -O2 2>&1";
+#elif defined(__APPLE__)
+	// macOS: .dylib
+	cmd = "clang -dynamiclib -o " + libFile + " " + srcFile + " -O2 2>&1";
+#else
+	// Linux: .so
+	cmd = "clang -shared -fPIC -o " + libFile + " " + srcFile + " -O2 2>&1";
+#endif
+
+	std::cout << "[compileNodeKernelDll] Running command:\n" << cmd << std::endl;
+
+	// 4. Run command and capture stdout+stderr
+	std::array<char, 128> buffer{};
+	std::string result;
+#ifdef _WIN32
+	FILE* pipe = _popen(cmd.c_str(), "r");
+#else
+	FILE* pipe = popen(cmd.c_str(), "r");
+#endif
+	if (!pipe) {
+		throw std::runtime_error("popen() failed when invoking compiler");
+	}
+	while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+		result += buffer.data();
+	}
+#ifdef _WIN32
+	int ret = _pclose(pipe);
+#else
+	int ret = pclose(pipe);
+#endif
+
+	// 5. Check return code
+	if (ret != 0) {
+		std::ostringstream oss;
+		oss << "Failed to compile dynamic library.\n"
+			<< "Command: " << cmd << "\n"
+			<< "Exit code: " << ret << "\n"
+			<< "Compiler output:\n" << result;
+		throw std::runtime_error(oss.str());
+	}
+
+	std::cout << "[compileNodeKernelDll] Compiler output:\n" << result << std::endl;
+
+	// 6. Load dynamic library
+	DYNLIB_HANDLE handle = DYNLIB_LOAD(libFile.c_str());
+	if (!handle) {
+		throw std::runtime_error("Failed to load dynamic library: " + libFile);
+	}
+
+	// 7. Resolve symbol
+	void* sym = (void*)DYNLIB_GETSYM(handle, funcName.c_str());
+	if (!sym) {
+		DYNLIB_CLOSE(handle);
+		throw std::runtime_error("Failed to resolve symbol: " + funcName);
+	}
+
+	return reinterpret_cast<NodeFn>(sym);
+}
+
+
+
 NodeFn compileNodeKernel(const std::string& sourceCode,
-	const std::string& funcName = "nodeTypeOutput", llvm::OptimizationLevel OX = llvm::OptimizationLevel::O3)
+	const std::string& funcName = "nodeTypeOutput",
+	llvm::OptimizationLevel OX = llvm::OptimizationLevel::O3)
 {
 	using namespace llvm;
 	using namespace llvm::orc;
@@ -52,26 +227,53 @@ NodeFn compileNodeKernel(const std::string& sourceCode,
 		initialized = true;
 	}
 
-	// set up Clang to compile C code to LLVM IR
-	auto CI = std::make_unique< clang::CompilerInstance>();
-	auto diagOpts = llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions>(new clang::DiagnosticOptions());
-	auto diagPrinter = new clang::TextDiagnosticPrinter(llvm::errs(), &*diagOpts);
-	auto diags = new clang::DiagnosticsEngine(
-		llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs>(new clang::DiagnosticIDs()),
-		&*diagOpts, diagPrinter);
+	// --- 1. Single LLVM context
+	auto TSCtx = std::make_unique<LLVMContext>();
+	LLVMContext* Ctx = TSCtx.get();
 
-	CI->createDiagnostics(diagPrinter, false);
+	// --- 2. Setup diagnostics
+	auto diagOpts = std::make_shared<clang::DiagnosticOptions>();
+	auto diagPrinter = std::make_unique<clang::TextDiagnosticPrinter>(
+		llvm::errs(), &*diagOpts);
+	clang::IntrusiveRefCntPtr<clang::DiagnosticIDs> diagID(new clang::DiagnosticIDs());
+	clang::DiagnosticsEngine diags(diagID, &*diagOpts, diagPrinter.get(), false);
 
-	std::vector<const char*> args = {
-		"clang++", "-xc++", "-std=c++20"
-	};
+	// --- 3. CompilerInvocation
+	auto invocation = std::make_shared<clang::CompilerInvocation>();
+	clang::CompilerInvocation::CreateFromArgs(
+		*invocation,
+		{ "-xc", "-std=c99", "-Wall", "-Wextra", "-O2" },
+		diags);
 
-	auto buffer = llvm::MemoryBuffer::getMemBuffer(sourceCode, "<jit-input>");
-	auto action = std::make_unique<clang::EmitLLVMOnlyAction>();
-	
-	std::unique_ptr<llvm::Module> M = action->takeModule();
-	if (!M) throw std::runtime_error("no module");
+	// --- 4. CompilerInstance
+	clang::CompilerInstance compiler;
+	compiler.setInvocation(invocation);
+	compiler.createDiagnostics(diagPrinter.release(), true);
 
+	auto TO = std::make_shared<clang::TargetOptions>();
+	TO->Triple = triple;
+	compiler.setTarget(clang::TargetInfo::CreateTargetInfo(compiler.getDiagnostics(), TO));
+
+	compiler.createFileManager();
+	compiler.createSourceManager(compiler.getFileManager());
+
+	// --- 5. Feed in-memory file
+	auto buffer = llvm::MemoryBuffer::getMemBufferCopy(sourceCode, "jit_input.c");
+	compiler.getSourceManager().setMainFileID(
+		compiler.getSourceManager().createFileID(std::move(buffer)));
+
+	// --- 6. Run EmitLLVMOnlyAction
+	clang::EmitLLVMOnlyAction action(Ctx);
+	if (!compiler.ExecuteAction(action)) {
+		throw std::runtime_error("clang failed to compile to LLVM IR");
+	}
+
+	std::unique_ptr<Module> M = action.takeModule();
+	if (!M) {
+		throw std::runtime_error("EmitLLVMOnlyAction returned no module");
+	}
+
+	// --- 7. Optimize the module
 	llvm::LoopAnalysisManager LAM;
 	llvm::FunctionAnalysisManager FAM;
 	llvm::CGSCCAnalysisManager CGAM;
@@ -84,19 +286,25 @@ NodeFn compileNodeKernel(const std::string& sourceCode,
 	PB.registerLoopAnalyses(LAM);
 	PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-	llvm::ModulePassManager MPM;
-	MPM = PB.buildPerModuleDefaultPipeline(OX); // or O2, Os, Oz
-
+	llvm::ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(OX);
 	MPM.run(*M, MAM);
 
+	// --- 8. Initialize the JIT if needed
+	if (!GlobalJIT) {
+		GlobalJIT = cantFail(LLJITBuilder().create());
+	}
 
-	auto jit = cantFail(LLJITBuilder().create());
-	auto TSM = orc::ThreadSafeModule(std::move(M), std::make_unique<LLVMContext>());
-	cantFail(jit->addIRModule(std::move(TSM)));
+	// --- 9. Hand module to ORC
+	orc::ThreadSafeModule TSM(std::move(M), std::move(TSCtx));
+	cantFail(GlobalJIT->addIRModule(std::move(TSM)));
 
-	auto sym = cantFail(jit->lookup(funcName));
+	// --- 10. Lookup symbol
+	auto sym = cantFail(GlobalJIT->lookup(funcName));
 	return sym.toPtr<NodeFn>();
 }
+
+
+
 
 uint64_t globalCompileCounter;
 
@@ -141,7 +349,7 @@ inline void convert(const std::span<ddtype>& data, InputType outboundType, Input
 	}
 }
 
-std::span<ddtype> Runner::runClang(const RunnerInput* runnerInputP, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
+std::span<ddtype> Runner::runClang(RunnerInput* runnerInputP, UserInput& userInput, const std::vector<std::span<ddtype>>& outerInputs)
 {
 	int outputSize = runnerInputP->outputNode->getCompileTimeSize(runnerInputP);
 	std::vector<ddtype> result;
@@ -158,7 +366,7 @@ std::span<ddtype> Runner::runClang(const RunnerInput* runnerInputP, UserInput& u
 		inputSizes.push_back(static_cast<int>(sp.size())); // length
 	}
 
-	runnerInputP->compiledFunc(result.data(), outputSize, inputPtrs.data(), inputSizes.data(), static_cast<int>(inputPtrs.size()), &userInput);
+	runnerInputP->compiledFunc(runnerInputP->field.data(), runnerInputP->field.size(), result.data(), outputSize, inputPtrs.data(), inputSizes.data(), static_cast<int>(inputPtrs.size()), &userInput);
 
 	return std::span<ddtype>(result);
 }
@@ -232,11 +440,10 @@ bool Runner::containsNodeField(NodeData* d, std::unordered_map<NodeData*, std::s
 }
 
 		
-std::vector<ddtype> Runner::findRemainingSizes(NodeData* root, RunnerInput& inlineInstance, const std::vector<std::span<ddtype>>& outerInputs)
-const std::vector<ddtype>& Runner::findRemainingSizes(
-	NodeData* node,
+std::vector<ddtype> Runner::findRemainingSizes(
+	NodeData* root,
 	RunnerInput& inlineInstance,
-	const std::vector<std::span<ddtype>>& outerInputs)
+	const std::vector<std::span<ddtype>>& outerInputs, UserInput& user)
 {
 	// If already cached
 	if (inlineInstance.nodeCompileTimeOutputs.contains(root)) {
@@ -246,15 +453,14 @@ const std::vector<ddtype>& Runner::findRemainingSizes(
 	struct Frame {
 		NodeData* node;
 		int state; // 0 = expand inputs, 1 = compute
-		std::vector<std::vector<ddtype>> inputspans;
 	};
 
 	std::vector<ddtype> result;
 	std::stack<Frame> stack;
-	stack.push({ root, 0, {} });
+	stack.push({ root, 0 });
 
 	while (!stack.empty()) {
-		Frame frame = std::move(stack.top());
+		Frame frame = stack.top();
 		stack.pop();
 
 		NodeData* node = frame.node;
@@ -267,20 +473,20 @@ const std::vector<ddtype>& Runner::findRemainingSizes(
 		if (frame.state == 0) {
 			// Expand inputs first
 			frame.state = 1;
-			stack.push(std::move(frame)); // push back current frame for later compute
+			stack.push(frame); // push back current frame for later compute
 
 			for (int i = node->getNumInputs() - 1; i >= 0; i--) {
 				NodeData* input = node->getInput(i);
-				if (input) {
-					if (!inlineInstance.nodeCompileTimeOutputs.contains(input)) {
-						stack.push({ input, 0, {} }); // process this child first
-					}
+				if (input && !inlineInstance.nodeCompileTimeOutputs.contains(input)) {
+					stack.push({ input, 0 }); // process child first
 				}
 			}
 		}
 		else {
-			// All inputs processed � compute this node
+			// All inputs processed → compute this node
 			std::vector<std::vector<ddtype>> inputspans;
+			inputspans.reserve(node->getNumInputs() + (node->getType()->isInputNode ? 1 : 0));
+
 			for (int i = 0; i < node->getNumInputs(); i++) {
 				NodeData* input = node->getInput(i);
 				if (input) {
@@ -297,11 +503,14 @@ const std::vector<ddtype>& Runner::findRemainingSizes(
 					inputspans.push_back({ 0.0 }); // TODO: custom defaults
 				}
 				else {
-					inputspans.push_back(std::vector<ddtype>(outerInputs[inputIndex].begin(), outerInputs[inputIndex].end()));
+					inputspans.push_back(std::vector<ddtype>(
+						outerInputs[inputIndex].begin(),
+						outerInputs[inputIndex].end()));
 				}
 			}
 
 			std::vector<std::span<ddtype>> actualspans;
+			actualspans.reserve(inputspans.size());
 			for (auto& vec : inputspans) {
 				actualspans.emplace_back(vec);
 			}
@@ -312,7 +521,7 @@ const std::vector<ddtype>& Runner::findRemainingSizes(
 			std::vector<ddtype> tempOutput(dim, 0.0);
 			std::span<ddtype> tempOutSpan(tempOutput);
 
-			UserInput user;
+			
 			node->getType()->execute(*node, user, actualspans, tempOutSpan, inlineInstance);
 
 			inlineInstance.nodeCompileTimeOutputs[node] = tempOutput;
@@ -325,6 +534,7 @@ const std::vector<ddtype>& Runner::findRemainingSizes(
 
 	return result;
 }
+
 
 
 void storeCopies(RunnerInput& input,
@@ -412,123 +622,143 @@ inline std::string sanitizeIdentifier(const std::string& s) {
 
 
 
-juce::String Runner::initializeClang(const RunnerInput& input,
-	const class SceneData* scene,
-	const std::vector<std::span<ddtype>>& outerInputs)
+std::string Runner::initializeClang(const RunnerInput& input,
+	const SceneData* scene,
+	const std::vector<std::span<ddtype>>& /*outerInputs*/)
 {
-	juce::String emitCode;
-	std::unordered_map<NodeData*, int> nodeFieldVars;
+	std::string emitCode;
+	std::unordered_map<NodeData*, int> nodeIndex;   // node -> ordinal
+	std::unordered_map<NodeData*, int> nodeCounts;  // node -> element count
+	std::unordered_map<NodeData*, int> nodeOffset;  // node -> start offset in dataField
 	std::unordered_map<std::string, GlobalClangVar> varDeclarations;
-	int i = 0;
 
-	// Allocate vectors per node
-	for (auto nd : input.nodesOrder) {
-		int count = nd->getCompileTimeSize(&input);
-		nodeFieldVars.insert({ nd, i });
+	// 1) Assign indices and record sizes
+	int idx = 0;
+	int totalElems = 0;
+	for (auto* nd : input.nodesOrder) {
+		const int count = nd->getCompileTimeSize(&input);
+		nodeIndex[nd] = idx;
+		nodeCounts[nd] = count;
+		nodeOffset[nd] = totalElems;      // start of this node’s slice
+		totalElems += count;
+		++idx;
 
-		emitCode << "std::vector<ddtype> field" << juce::String(i)
-			<< "(" << juce::String(count) << ");\n";
-		emitCode << "int size" << juce::String(i)
-			<< " = (int)field" << juce::String(i) << ".size();\n";
-
-		for (auto& gv : nd->getType()->globalVarNames(*nd, i)) {
+		for (auto& gv : nd->getType()->globalVarNames(*nd, nodeIndex[nd])) {
 			std::string sanitized = sanitizeIdentifier(gv.varName);
-			if (!varDeclarations.contains(sanitized)) {
-				GlobalClangVar safeVar = gv;
-				safeVar.varName = sanitized;
-				varDeclarations.insert({ sanitized, safeVar });
+			if (!varDeclarations.count(sanitized)) {
+				auto safe = gv; safe.varName = sanitized;
+				varDeclarations.emplace(sanitized, safe);
 			}
 		}
-
-		++i;
 	}
 
-	// Emit global vars
+	// 2) Emit total requirement and optional guard
+	emitCode += "const int kTotalArenaElems = " + std::to_string(totalElems) + ";\n";
+	emitCode += "(void)kTotalArenaElems;\n";
+	// If you want a cheap guard (won’t crash if caller passes wrong size)
+	emitCode += "if (dataFieldSize < kTotalArenaElems) { /* TODO: handle error */ return; }\n";
+
+	// 3) Emit global vars
 	for (const auto& [_, gv] : varDeclarations) {
-		emitCode << (gv.isStatic ? "static " : "") << gv.type << " " << gv.varName << ";\n";
+		emitCode += (gv.isStatic ? "static " : "") + gv.type + " " + gv.varName + ";\n";
 	}
 
-	// Emit code per node
+	// 4) Emit per-node code blocks
 	int ord = 0;
-	for (const auto nd : input.nodesOrder) {
-		const auto idx = nodeFieldVars.at(nd);
-		emitCode << "{\n";
+	for (auto* nd : input.nodesOrder) {
+		const int i = nodeIndex.at(nd);
+		const int count = nodeCounts.at(nd);
+		const int startOff = nodeOffset.at(nd);
 
+		emitCode += "{\n";
+
+		// Arena-backed outputs for non-final nodes
 		if (nd != input.outputNode) {
-			emitCode << "  std::vector<ddtype>& o = field" << juce::String(idx) << ";\n";
-			emitCode << "  int osize = size" << juce::String(idx) << ";\n";
+			emitCode += "  ddtype* o = dataField + " + std::to_string(startOff) + ";\n";
+			emitCode += "  int osize = " + std::to_string(count) + ";\n";
 		}
 		else {
-			emitCode << "  std::vector<ddtype> o(output, output + outputSize);\n";
-			emitCode << "  int osize = outputSize;\n";
+			// Final node writes to provided output buffer
+			emitCode += "  ddtype* o = output;\n";
+			emitCode += "  int osize = outputSize;\n";
 		}
 
 		// Numeric props
-		for (const auto& [c, d] : nd->getNumericProperties()) {
-			std::string sanitizedKey = sanitizeIdentifier(c);
-			emitCode << "  double n_" << sanitizedKey << " = "
-				<< emitNumericLiteral(d) << ";\n";
+		for (auto& [k, v] : nd->getNumericProperties()) {
+			std::string sk = sanitizeIdentifier(k);
+			emitCode += "  double n_" + sk + " = " + emitNumericLiteral(v) + ";\n";
 		}
 
 		// String props
-		for (const auto& [k, v] : nd->getProperties()) {
-			emitCode << "  const char* s_" << k << " = \"" << v << "\";\n";
+		for (auto& [k, v] : nd->getProperties()) {
+			emitCode += "  const char* s_" + k + " = \"" + v + "\";\n";
 		}
 
-		// Optional stored audio
+		// Optional stored audio → local array (C99)
 		if (!nd->optionalStoredAudio.empty()) {
-			emitCode << "  std::vector<ddtype> stores = {";
-			for (size_t idx2 = 0; idx2 < nd->optionalStoredAudio.size(); ++idx2) {
-				auto d = nd->optionalStoredAudio[idx2];
-				if (idx2 > 0) emitCode << ", ";
-				emitCode << "{ .i = " << d.i << "LL }";
+			emitCode += "  ddtype stores[" + std::to_string(nd->optionalStoredAudio.size()) + "];\n";
+			for (size_t k = 0; k < nd->optionalStoredAudio.size(); ++k) {
+				emitCode += "  stores[" + std::to_string(k) + "].i = "
+					+ std::to_string(nd->optionalStoredAudio[k].i) + "LL;\n";
 			}
-			emitCode << "};\n";
 		}
 
-		// Input nodes
+		// Inputs
 		if (nd->getType()->isInputNode) {
 			const int pin = nd->inputIndex;
-			emitCode << "  std::vector<ddtype> i0(inputs[" << pin << "], inputs[" << pin << "] + inputSizes[" << pin << "]);\n";
-			emitCode << "  int isize0 = (int)i0.size();\n";
+			emitCode += "  ddtype* i0 = inputs[" + std::to_string(pin) + "];\n";
+			emitCode += "  int     isize0 = inputSizes[" + std::to_string(pin) + "];\n";
 		}
 		else {
-			// Regular inputs
-			for (int j = 0; j < nd->getNumInputs(); j++) {
-				auto* inp = nd->getInput(j);
-				if (inp) {
-					const auto srcIdx = nodeFieldVars.at(inp);
-					emitCode << "  std::vector<ddtype>& i" << j << " = field" << juce::String(srcIdx) << ";\n";
-					emitCode << "  int isize" << j << " = size" << juce::String(srcIdx) << ";\n";
+			for (int j = 0; j < nd->getNumInputs(); ++j) {
+				auto* src = nd->getInput(j);
+				if (src) {
+					const int sIdx = nodeIndex.at(src);
+					const int sCount = nodeCounts.at(src);
+					const int sOff = nodeOffset.at(src);
+					emitCode += "  ddtype* i" + std::to_string(j)
+						+ " = dataField + " + std::to_string(sOff) + ";\n";
+					emitCode += "  int     isize" + std::to_string(j)
+						+ " = " + std::to_string(sCount) + ";\n";
 
-					// Conversion handling
-					auto itype = nd->getType()->inputs[j].inputType;
-					if (itype == InputType::any) itype = nd->getTrueType();
-					auto otype = inp->getType()->outputType;
-					if (otype == InputType::followsInput) otype = inp->getTrueType();
-
-					if (otype != itype) {
-						emitCode << "  std::vector<ddtype> i" << j << "_conv(isize" << j << ");\n";
-						// emit conversion loop (similar to your old one, but writing into iX_conv)
-						// ...
-						emitCode << "  i" << j << " = i" << j << "_conv;\n";
-					}
+					// (Optional) type-conversion buffer if required
+					// Emit under a condition the same way you did before:
+					//   ddtype* iJ_conv = (ddtype*)malloc(isizeJ * sizeof(ddtype));
+					//   for (...) iJ_conv[k] = convert_ddtype(...);
+					//   iJ = iJ_conv;
 				}
 				else {
+					// Unconnected input → use stack-allocated ddtype
 					auto type = nd->getType()->inputs[j].inputType;
-					if (type == InputType::any) type = nd->getTrueType();
-					emitCode << "  std::vector<ddtype> i" << j << "(1);\n";
-					if (type == InputType::decimal)
-						emitCode << "  i" << j << "[0].d = " << juce::String(nd->defaultValues[j].d) << ";\n";
-					else
-						emitCode << "  i" << j << "[0].i = " << juce::String(nd->defaultValues[j].i) << ";\n";
-					emitCode << "  int isize" << j << " = 1;\n";
+
+					// Define a local variable
+					emitCode += "  ddtype i" + std::to_string(j) + "_default;\n";
+
+					// Initialize it
+					if (type == InputType::decimal) {
+						emitCode += "  i" + std::to_string(j) + "_default.d = "
+							+ std::to_string(nd->defaultValues[j].d) + ";\n";
+					}
+					else {
+						emitCode += "  i" + std::to_string(j) + "_default.i = "
+							+ std::to_string(nd->defaultValues[j].i) + ";\n";
+					}
+
+					// Pointer to the default
+					emitCode += "  ddtype* i" + std::to_string(j)
+						+ " = &i" + std::to_string(j) + "_default;\n";
+					emitCode += "  int isize" + std::to_string(j) + " = 1;\n";
 				}
 			}
 		}
 
-		emitCode << "  " << nd->getType()->emitCode(*nd, ord) << "\n";
-		emitCode << "}\n\n";
+		// Node body
+		emitCode += "  " + nd->getType()->emitCode(*nd, ord) + "\n";
+
+		// (Optional) Free any conversion/default buffers you actually allocated above
+		// emitCode += "  /* free(iJ_conv / iJ defaults if allocated) */\n";
+
+		emitCode += "}\n\n";
 		++ord;
 	}
 
@@ -536,8 +766,12 @@ juce::String Runner::initializeClang(const RunnerInput& input,
 }
 
 
+
 const char* ddtypeClang =
 "#include <stdint.h>\n"
+"#include <math.h>\n"
+"#include <stdlib.h>\n"
+"#include <stdbool.h>\n"
 "typedef union {\n"
 "    double d;\n"
 "    int64_t i;\n"
@@ -546,8 +780,16 @@ const char* ddtypeClang =
 const juce::String ddtypeClangJ(ddtypeClang);
 
 const juce::String clangHeader(uint64_t x) {
-	return ddtypeClangJ + UserInputClangJ + "#include <cmath>\n#include <cstdlib>\nextern \"C\" void nodeTypeOutput" + juce::String(x) + "(ddtype * output, int outputSize, ddtype * *inputs, int* inputSizes, int numInputs) { ";
+	return ddtypeClangJ + UserInputClangJ +
+#ifdef _WIN32
+		"__declspec(dllexport) " +
+#endif
+		"void nodeTypeOutput" + juce::String(x) +
+		"(ddtype* dataField, int dataFieldSize, "
+		"ddtype* output, int outputSize, "
+		"ddtype** inputs, int* inputSizes, int numInputs) { ";
 }
+
 const juce::String clangCloser = "}";
 
 void Runner::initialize(RunnerInput& input, class SceneData* scene,
@@ -576,8 +818,9 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene,
 	for (auto& newNode : input.nodeCopies)
 		newNode->markUncompiled(&input);
 
+	std::unique_ptr<UserInput> userInput = std::make_unique<UserInput>();
 	for (auto& node : input.nodeCopies)
-		findRemainingSizes(node.get(), input, outerInputs); // just warms the cache
+		findRemainingSizes(node.get(), input, outerInputs, *userInput); // just warms the cache
 
 	setupRecursive(input.outputNode, input);
 
@@ -600,14 +843,17 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene,
 	case OptLevel::prioritizeSize: OX = llvm::OptimizationLevel::Oz; break;
 	case OptLevel::tradeOffSize:   OX = llvm::OptimizationLevel::Os; break;
 	}
-
+#ifdef USE_EMBEDDED_CLANG
 	input.compiledFunc = compileNodeKernel(
+		input.clangcode, (juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString(), OX);
+#else 
+	input.compiledFunc = compileNodeKernelDll(
 		input.clangcode,
-		(juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString(),
-		OX);
+		(juce::String("nodeTypeOutput") + juce::String(globalCompileCounter)).toStdString(), input.optLevel);
+		//,OX);
+#endif
 
 	// Handle compile-time known nodes
-	UserInput fakeInput;
 	std::vector<NodeData*> tempNodesOrder;
 	for (NodeData* node : input.nodesOrder) {
 		if (node->isCompileTimeKnown()) {
@@ -638,7 +884,7 @@ void Runner::initialize(RunnerInput& input, class SceneData* scene,
 					inputs.push_back(spanOverDefaultIfNeeded);
 			}
 
-			node->getType()->execute(*node, fakeInput, inputs, output, input);
+			node->getType()->execute(*node, *userInput, inputs, output, input);
 		}
 		else {
 			tempNodesOrder.push_back(node);

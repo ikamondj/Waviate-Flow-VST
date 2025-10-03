@@ -82,7 +82,8 @@ public:
     std::unordered_map<juce::String, int> keyCodeTypeMapping;
     std::vector<NodeType> registry;
     std::vector<std::unique_ptr<SceneComponent>> scenes;
-    UserInput userInput;
+    std::unique_ptr<UserInput> userInput;
+    std::unique_ptr<UserInput> dummyInput;
     std::array<double, 128> noteHzOfficialValues;
     void initializeRegistry();
     void setAudibleScene(class SceneData* scene);
