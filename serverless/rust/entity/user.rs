@@ -14,6 +14,9 @@ pub struct Model {
 }
 
 #[derive(Copy, Clone, Debug, EnumIter)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(has_many = "super::marketplace_content::Entity")]
+    MarketplaceContent,
+}
 
 impl ActiveModelBehavior for ActiveModel {}

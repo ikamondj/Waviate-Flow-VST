@@ -104,7 +104,7 @@ public:
     juce::AbstractFifo fifo{ bufferSize };
     class SceneData* getAudibleScene();
     std::optional<UserData> currentLogin;
-    uint16_t getCurrentLoadedTypeIndex();
+    uint64_t getCurrentLoadedTypeIndex();
     uint64_t getCurrentLoadedUserIndex();
     void initializeAllScenes();
     void displaySceneName();
@@ -118,7 +118,7 @@ protected:
     void initializeRegistryMidi();
     void initializeRegistryVector();
 private:
-    uint16_t currentLoadedTypeIndex = 0;
+    uint64_t currentLoadedTypeIndex = 0;
     uint64_t currentLoadedUserIndex = 1;
     class SceneData* audibleScene;
     juce::AudioBuffer<double> dbuff;

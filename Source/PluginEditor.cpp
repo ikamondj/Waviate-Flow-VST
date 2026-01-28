@@ -18,7 +18,6 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
     : AudioProcessorEditor(&p),
     audioProcessor(p),
     resizerBar(&horizontalLayout, 1, true),
-    browser("browser", nullptr),
     scenePropertiesComponent(p),
     sceneExplorerComponent(p),
     authPropertiesComponent(p),
@@ -76,41 +75,11 @@ WaviateFlow2025AudioProcessorEditor::WaviateFlow2025AudioProcessorEditor(Waviate
         audioProcessor.scenes[row]->customNodeType.name = name;
     };
 
-    addButton.onClick = [&]() {
-        juce::String name = "New Function";
-
-        bool nameFound = false;
-        for (auto& scene : audioProcessor.scenes) {
-            if (scene->getSceneName() == name) {
-                nameFound = true;
-            }
-        }
-        if (nameFound) {
-            
-            int i = 1;
-            while (true) {
-                nameFound = false;
-                for (auto& scene : audioProcessor.scenes) {
-                    name = "New Function " + juce::String(i);
-                    if (scene->getSceneName() == name) {
-                        nameFound = true;
-                    }
-                    
-                }
-                i += 1;
-                if (!nameFound) {
-                    break;
-                }
-            }
-        }
-        
-        audioProcessor.addScene(name);
-    };
 
     // Configure the layout manager for horizontal split
-    horizontalLayout.setItemLayout(0, -0.0, -0.0, -0.0); // browser: 20–80% (pref ~30%)
+    horizontalLayout.setItemLayout(0, -0.0, -0.0, -0.0); // browser: 20ï¿½80% (pref ~30%)
     horizontalLayout.setItemLayout(1, 0, 0, 0);  // resizer bar: fixed 8 px
-    horizontalLayout.setItemLayout(2, -1.0, -1.0, -1.0); // canvas: 20–80% (pref ~70%)
+    horizontalLayout.setItemLayout(2, -1.0, -1.0, -1.0); // canvas: 20ï¿½80% (pref ~70%)
 
     for (auto& scene : audioProcessor.scenes) {
         canvas.addAndMakeVisible(scene.get());
@@ -310,10 +279,10 @@ void WaviateFlow2025AudioProcessorEditor::timerCallback()
             current = 0.0f;
             sideVel = 0.0;
         }
-        horizontalLayout.setItemLayout(0, 200 * current, 320 * current, activePreferredValue); // browser: 20–80% (pref ~30%)
+        horizontalLayout.setItemLayout(0, 200 * current, 320 * current, activePreferredValue); // browser: 20ï¿½80% (pref ~30%)
         float fp = 8 * current;
         horizontalLayout.setItemLayout(1, fp, fp, fp);  // resizer bar: fixed 8 px
-        horizontalLayout.setItemLayout(2, -0.001, -1.0, -1.0); // canvas: 20–80% (pref ~70%)
+        horizontalLayout.setItemLayout(2, -0.001, -1.0, -1.0); // canvas: 20ï¿½80% (pref ~70%)
         resizerBar.setEnabled(false);
     }
 
